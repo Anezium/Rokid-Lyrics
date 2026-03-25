@@ -1,6 +1,8 @@
 ## Rokid Lyrics
 
-![Rokid Lyrics logo](Rokid_Lyrics_logo.png)
+<p align="center">
+  <img src="Rokid_Lyrics_logo.png" alt="Rokid Lyrics logo" width="220" />
+</p>
 
 Bluetooth-only split product for synced lyrics on Rokid glasses.
 
