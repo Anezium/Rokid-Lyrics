@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <TextView
+        android:id="@+id/tvConnectionStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:paddingStart="12dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="12dp"
+        android:textColor="#BDBDBD"
+        android:textSize="12sp" />
+
+    <com.rokid.lyrics.glasses.LyricsHudView
+        android:id="@+id/lyricsHudView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+</merge>
