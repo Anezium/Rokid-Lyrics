@@ -1,5 +1,7 @@
 ## Rokid Lyrics
 
+![Rokid Lyrics logo](Rokid_Lyrics_logo.png)
+
 Bluetooth-only split product for synced lyrics on Rokid glasses.
 
 Structure:
