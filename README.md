@@ -33,23 +33,10 @@ No internet required on the glasses side. No cloud relay. Everything runs locall
 
 ## Features
 
-**Phone app**
-- Detects active media sessions automatically (supports any Android media player)
-- Prioritizes Spotify when multiple players are active
-- Fetches time-synced LRC lyrics from LRCLIB (3-tier lookup: cached → exact → fuzzy search)
-- Falls back to plain lyrics if no synced version is available
-- Serves lyrics to multiple glasses clients simultaneously over Bluetooth SPP
-- Debounced broadcast — only sends deltas to avoid flooding the BT link
-- Drift correction: re-syncs playback position if glasses drift > 1.5 seconds
-- Runs as a foreground service — stays alive when the screen is off
-- **Phosphor Glass UI** — monochrome green HUD aesthetic mirroring the glasses display, with 4-line lyrics cascade, live progress bar, and animated BT status
-
-**Glasses app**
-- Connects to the phone over Bluetooth Classic
-- Receives a full lyrics snapshot on connect, advances locally by timer
-- Displays current + next lyric line on the AR overlay
-- Press Enter (or D-pad center) to play/pause the music on the phone
-- Minimal battery impact — no polling, event-driven updates only
+- Time-synced lyrics on the AR display, automatically fetched for whatever is playing
+- Works with any Android media player — Spotify, YouTube, Apple Music, etc.
+- Runs entirely over Bluetooth, no internet needed on the glasses
+- Press Enter on the glasses to play/pause the music on the phone
 
 ---
 
