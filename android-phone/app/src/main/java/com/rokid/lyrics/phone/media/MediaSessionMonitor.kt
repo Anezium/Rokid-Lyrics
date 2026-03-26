@@ -104,6 +104,34 @@ class MediaSessionMonitor(
         attachToController(selectController(controllers))
     }
 
+    fun togglePlayback() {
+        if (!started) return
+        val controller = currentController ?: resolveActiveController()
+        if (controller == null) {
+            onStatusChanged("No active media session to control. Start Spotify on the phone.")
+            return
+        }
+
+        val playbackState = controller.playbackState
+        val transportControls = controller.transportControls
+        val isPlaying = playbackState?.state in setOf(
+            PlaybackState.STATE_PLAYING,
+            PlaybackState.STATE_FAST_FORWARDING,
+            PlaybackState.STATE_REWINDING,
+            PlaybackState.STATE_BUFFERING,
+        )
+
+        runCatching {
+            if (isPlaying) {
+                transportControls.pause()
+            } else {
+                transportControls.play()
+            }
+        }.onFailure {
+            onStatusChanged("Unable to control playback: ${it.message ?: "unknown error"}")
+        }
+    }
+
     private fun attachToController(controller: MediaController?) {
         val previous = currentController
         if (previous?.sessionToken == controller?.sessionToken) {
@@ -144,6 +172,20 @@ class MediaSessionMonitor(
         }.onFailure {
             onStatusChanged("Media session listener failed: ${it.message ?: "unknown error"}")
         }
+    }
+
+    private fun resolveActiveController(): MediaController? {
+        if (!isNotificationAccessEnabled()) return null
+        val controllers = runCatching {
+            mediaSessionManager?.getActiveSessions(listenerComponent).orEmpty()
+        }.getOrElse {
+            emptyList()
+        }
+        val controller = selectController(controllers)
+        if (controller != null) {
+            attachToController(controller)
+        }
+        return controller
     }
 
     private fun buildSnapshot(controller: MediaController?): MediaPlaybackSnapshot? {

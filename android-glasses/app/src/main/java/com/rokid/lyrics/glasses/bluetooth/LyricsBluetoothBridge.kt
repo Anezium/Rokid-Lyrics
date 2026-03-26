@@ -26,16 +26,47 @@ class LyricsBluetoothBridge(
 ) {
     private val listeners = CopyOnWriteArraySet<(PhoneToGlassesMessage) -> Unit>()
     private val pendingMessages = CopyOnWriteArrayList<GlassesToPhoneMessage>()
-    @Volatile private var running = true
+    private val controlLock = Object()
+    @Volatile private var closed = false
+    @Volatile private var active = false
+    @Volatile private var hibernating = false
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var writer: BufferedWriter? = null
+    @Volatile private var connectThread: Thread? = null
 
-    init {
-        startConnectLoop()
+    fun resume() {
+        if (closed) return
+        active = true
+        hibernating = false
+        ensureConnectLoop()
+        connectThread?.interrupt()
+        synchronized(controlLock) {
+            controlLock.notifyAll()
+        }
+    }
+
+    fun pause() {
+        active = false
+        hibernating = false
+        closeSocket()
+        connectThread?.interrupt()
+    }
+
+    fun hibernate() {
+        if (closed) return
+        active = false
+        hibernating = true
+        closeSocket()
+        ensureConnectLoop()
+        connectThread?.interrupt()
+        synchronized(controlLock) {
+            controlLock.notifyAll()
+        }
     }
 
     fun send(message: GlassesToPhoneMessage) {
-        if (!trySend(message)) {
+        if (closed) return
+        if (!trySend(message) && shouldQueue(message)) {
             pendingMessages += message
         }
     }
@@ -46,49 +77,103 @@ class LyricsBluetoothBridge(
     }
 
     fun close() {
-        running = false
+        closed = true
+        active = false
+        hibernating = false
         closeSocket()
-        emitStatus(ConnectionState.DISCONNECTED, "Bluetooth bridge stopped.")
+        synchronized(controlLock) {
+            controlLock.notifyAll()
+        }
+        connectThread?.interrupt()
     }
 
     @SuppressLint("MissingPermission")
-    private fun startConnectLoop() {
-        Thread {
-            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            val adapter = bluetoothManager?.adapter
-            if (adapter == null) {
-                emitStatus(ConnectionState.DISCONNECTED, "Bluetooth adapter unavailable on the glasses.")
-                return@Thread
-            }
-
-            emitStatus(ConnectionState.CONNECTING, "Searching for the phone over Bluetooth...")
-            while (running) {
-                if (socket != null && writer != null) {
-                    Thread.sleep(RECONNECT_DELAY_MS)
-                    continue
+    private fun ensureConnectLoop() {
+        val existing = connectThread
+        if (existing?.isAlive == true) return
+        connectThread = Thread(
+            Runnable {
+                val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+                val adapter = bluetoothManager?.adapter
+                if (adapter == null) {
+                    emitStatus(ConnectionState.DISCONNECTED, "Bluetooth adapter unavailable on the glasses.")
+                    return@Runnable
                 }
 
-                adapter.cancelDiscovery()
-                val candidate = preferredDevices(adapter).firstNotNullOfOrNull(::tryConnect)
-                if (candidate == null) {
-                    emitStatus(ConnectionState.CONNECTING, "No paired phone accepted the Lyrics Bluetooth link yet.")
-                    Thread.sleep(RECONNECT_DELAY_MS)
-                    continue
-                }
+                while (!closed) {
+                    if (!waitUntilConnectAllowed()) break
+                    if (!active && hibernating) {
+                        sleep(HIBERNATE_REFRESH_INTERVAL_MS)
+                        if (closed) break
+                        if (active || !hibernating) continue
+                    }
+                    if (socket != null && writer != null) {
+                        sleep(if (active) RECONNECT_DELAY_MS else HIBERNATE_CONNECTED_WINDOW_MS)
+                        continue
+                    }
 
-                socket = candidate
-                writer = BufferedWriter(OutputStreamWriter(candidate.outputStream, Charsets.UTF_8))
-                emitStatus(
-                    ConnectionState.CONNECTED,
-                    "Connected to ${safeName(candidate.remoteDevice)} via Bluetooth.",
-                )
-                flushPending()
-                send(GlassesToPhoneMessage.RequestStatus)
-                send(GlassesToPhoneMessage.RequestSnapshot)
-                startReader(candidate)
-                Thread.sleep(RECONNECT_DELAY_MS)
+                    adapter.cancelDiscovery()
+                    val candidate = preferredDevices(adapter).firstNotNullOfOrNull(::tryConnect)
+                    if (candidate == null) {
+                        if (active && !closed) {
+                            emitStatus(
+                                ConnectionState.CONNECTING,
+                                "No paired phone accepted the Lyrics Bluetooth link yet.",
+                            )
+                        }
+                        sleep(RECONNECT_DELAY_MS)
+                        continue
+                    }
+
+                    if ((!active && !hibernating) || closed) {
+                        runCatching { candidate.close() }
+                        continue
+                    }
+
+                    socket = candidate
+                    writer = BufferedWriter(OutputStreamWriter(candidate.outputStream, Charsets.UTF_8))
+                    if (active) {
+                        emitStatus(
+                            ConnectionState.CONNECTED,
+                            "Connected to ${safeName(candidate.remoteDevice)} via Bluetooth.",
+                        )
+                    }
+                    flushPending()
+                    startReader(candidate)
+                    if (active) {
+                        sleep(RECONNECT_DELAY_MS)
+                    } else {
+                        sleep(HIBERNATE_CONNECTED_WINDOW_MS)
+                        if (!active) {
+                            closeSocket()
+                        }
+                    }
+                }
+            },
+            "LyricsBluetoothBridge",
+        ).also { it.start() }
+    }
+
+    private fun waitUntilConnectAllowed(): Boolean {
+        if (closed) return false
+        if (active || hibernating) return true
+        return try {
+            synchronized(controlLock) {
+                while (!active && !hibernating && !closed) {
+                    controlLock.wait()
+                }
             }
-        }.start()
+            !closed
+        } catch (_: InterruptedException) {
+            !closed && (active || hibernating)
+        }
+    }
+
+    private fun sleep(delayMs: Long) {
+        try {
+            Thread.sleep(delayMs)
+        } catch (_: InterruptedException) {
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -123,7 +208,7 @@ class LyricsBluetoothBridge(
         Thread {
             try {
                 val reader = BufferedReader(InputStreamReader(activeSocket.inputStream, Charsets.UTF_8))
-                while (running) {
+                while (!closed) {
                     val line = reader.readLine() ?: break
                     WireProtocol.decodePhoneMessageOrNull(line)?.let { message ->
                         listeners.forEach { it(message) }
@@ -137,6 +222,7 @@ class LyricsBluetoothBridge(
     }
 
     private fun trySend(message: GlassesToPhoneMessage): Boolean {
+        if (!active) return false
         val activeWriter = writer ?: return false
         return try {
             activeWriter.write(WireProtocol.encodeGlassesMessage(message))
@@ -149,8 +235,14 @@ class LyricsBluetoothBridge(
         }
     }
 
+    private fun shouldQueue(message: GlassesToPhoneMessage): Boolean = when (message) {
+        GlassesToPhoneMessage.RequestSnapshot,
+        GlassesToPhoneMessage.RequestStatus -> true
+        GlassesToPhoneMessage.TogglePlayback -> false
+    }
+
     private fun flushPending() {
-        if (pendingMessages.isEmpty()) return
+        if ((!active && !hibernating) || pendingMessages.isEmpty()) return
         val drain = pendingMessages.toList()
         pendingMessages.clear()
         drain.forEach { message ->
@@ -162,7 +254,7 @@ class LyricsBluetoothBridge(
 
     private fun handleDisconnect() {
         closeSocket()
-        if (running) {
+        if (!closed && active) {
             emitStatus(ConnectionState.CONNECTING, "Bluetooth link lost. Reconnecting to the phone...")
         }
     }
@@ -193,5 +285,7 @@ class LyricsBluetoothBridge(
 
     private companion object {
         private const val RECONNECT_DELAY_MS = 2500L
+        private const val HIBERNATE_REFRESH_INTERVAL_MS = 20_000L
+        private const val HIBERNATE_CONNECTED_WINDOW_MS = 3_500L
     }
 }

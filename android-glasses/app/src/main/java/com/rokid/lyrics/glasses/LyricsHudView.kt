@@ -3,7 +3,10 @@ package com.rokid.lyrics.glasses
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.os.Build
 import android.os.SystemClock
+import android.text.Layout
+import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
@@ -17,12 +20,13 @@ class LyricsHudView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : LinearLayout(context, attrs) {
+    private val headerContainer: LinearLayout
     private val titleView: TextView
     private val metaView: TextView
     private val stateView: TextView
     private val currentLineView: TextView
     private val nextLineView: TextView
-    private val summaryView: TextView
+    private val bottomSpacer: View
     private val hintView: TextView
 
     private var lastRenderedState: LyricsGlassesState? = null
@@ -42,56 +46,74 @@ class LyricsHudView @JvmOverloads constructor(
 
     init {
         orientation = VERTICAL
-        setBackgroundColor(Color.parseColor("#99000000"))
-        setPadding(px(14), px(12), px(14), px(12))
+        gravity = Gravity.TOP
+        setBackgroundColor(Color.TRANSPARENT)
+        setPadding(px(12), px(8), px(12), px(6))
 
-        titleView = monoText(20f, Color.WHITE).apply {
+        headerContainer = LinearLayout(context).apply {
+            orientation = VERTICAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        }
+
+        titleView = monoText(18f, Color.WHITE).apply {
             setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
         }
-        metaView = monoText(12f, COLOR_DIM).apply {
+        metaView = monoText(11f, COLOR_DIM).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = px(4)
+                topMargin = px(2)
             }
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
         }
-        stateView = monoText(12f, COLOR_SECONDARY).apply {
+        stateView = monoText(11f, COLOR_SECONDARY).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                topMargin = px(6)
+            }
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        currentLineView = monoText(24f, COLOR_PRIMARY).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            textAlignment = TEXT_ALIGNMENT_CENTER
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                topMargin = px(14)
+            }
+            maxLines = 5
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        nextLineView = monoText(18f, COLOR_SECONDARY).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            textAlignment = TEXT_ALIGNMENT_CENTER
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                 topMargin = px(10)
-                bottomMargin = px(10)
             }
+            maxLines = 3
+            ellipsize = TextUtils.TruncateAt.END
         }
-        currentLineView = monoText(22f, COLOR_PRIMARY).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = px(18)
-            }
+        bottomSpacer = View(context).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
         }
-        nextLineView = monoText(17f, COLOR_SECONDARY).apply {
+        hintView = monoText(10.5f, COLOR_HINT).apply {
             gravity = Gravity.CENTER_HORIZONTAL
+            textAlignment = TEXT_ALIGNMENT_CENTER
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = px(16)
+                topMargin = px(12)
             }
-        }
-        summaryView = monoText(13f, COLOR_DIM).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = px(18)
-            }
-        }
-        hintView = monoText(11f, COLOR_DIM).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = px(18)
-            }
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
         }
 
-        addView(titleView)
-        addView(metaView)
-        addView(divider())
-        addView(stateView)
+        headerContainer.addView(titleView)
+        headerContainer.addView(metaView)
+        headerContainer.addView(stateView)
+
+        addView(headerContainer)
         addView(currentLineView)
         addView(nextLineView)
-        addView(summaryView)
+        addView(bottomSpacer)
         addView(hintView)
     }
 
@@ -106,54 +128,88 @@ class LyricsHudView @JvmOverloads constructor(
         }
     }
 
-    private fun renderContent(state: LyricsGlassesState) {
-        titleView.text = when {
-            state.trackTitle.isNotBlank() && state.artistName.isNotBlank() ->
-                "${state.trackTitle}  /  ${state.artistName}"
-            state.trackTitle.isNotBlank() -> state.trackTitle
-            else -> "Lyrics"
-        }
+    fun suspendTicker() {
+        removeCallbacks(playbackTicker)
+    }
 
-        metaView.text = buildString {
+    override fun onDetachedFromWindow() {
+        removeCallbacks(playbackTicker)
+        super.onDetachedFromWindow()
+    }
+
+    private fun renderContent(state: LyricsGlassesState) {
+        val title = buildTitle(state)
+        val meta = buildMeta(state)
+        val status = buildStatus(state)
+        val body = bodyCopy(state)
+
+        titleView.text = title
+        titleView.visibility = if (title.isBlank()) GONE else VISIBLE
+
+        metaView.text = meta
+        metaView.visibility = if (meta.isBlank()) GONE else VISIBLE
+
+        stateView.text = status
+        stateView.visibility = if (status.isBlank()) GONE else VISIBLE
+        headerContainer.visibility =
+            if (titleView.visibility == GONE && metaView.visibility == GONE && stateView.visibility == GONE) {
+                GONE
+            } else {
+                VISIBLE
+            }
+
+        currentLineView.text = body.currentLine
+        nextLineView.text = body.nextLine
+        nextLineView.visibility = if (body.nextLine.isBlank()) GONE else VISIBLE
+        hintView.text = body.hint
+    }
+
+    private fun buildTitle(state: LyricsGlassesState): String = when {
+        state.trackTitle.isNotBlank() && state.artistName.isNotBlank() ->
+            "${state.trackTitle}  /  ${state.artistName}"
+        state.trackTitle.isNotBlank() -> state.trackTitle
+        else -> ""
+    }
+
+    private fun buildMeta(state: LyricsGlassesState): String {
+        if (state.trackTitle.isBlank() && state.artistName.isBlank()) return ""
+        return buildString {
             append(state.provider.ifBlank { "LRCLIB" })
             if (state.synced) append("  synced")
             if (state.albumName.isNotBlank()) append("  /  ${state.albumName}")
         }
+    }
 
-        stateView.text = buildStateLabel(state)
-
-        val body = bodyCopy(state)
-        currentLineView.text = body.currentLine
-        nextLineView.text = body.nextLine
-        summaryView.text = body.summary
-        hintView.text = body.hint
+    private fun buildStatus(state: LyricsGlassesState): String {
+        return when {
+            state.connectionState != ConnectionState.CONNECTED -> state.statusLabel
+            state.lyricsSessionState == LyricsSessionState.LOADING -> "Loading lyrics..."
+            else -> ""
+        }
     }
 
     private fun bodyCopy(state: LyricsGlassesState): BodyCopy {
         if (state.connectionState != ConnectionState.CONNECTED && state.trackTitle.isBlank()) {
             return BodyCopy(
                 currentLine = "Waiting for the phone Bluetooth link.",
-                nextLine = "Pair the phone app, then start playback.",
-                summary = state.statusLabel,
-                hint = "Enter = refresh from phone",
+                nextLine = "Open the phone app, then start playback.",
+                hint = CONTROL_HINT,
             )
         }
 
         if (state.lyricsSessionState == LyricsSessionState.LOADING) {
             return BodyCopy(
                 currentLine = "Loading lyrics...",
-                nextLine = "Querying LRCLIB from the phone.",
-                summary = state.sourceSummary,
-                hint = "Enter = retry lookup",
+                nextLine = "",
+                hint = CONTROL_HINT,
             )
         }
 
         state.errorMessage?.takeIf { it.isNotBlank() }?.let { error ->
             return BodyCopy(
                 currentLine = error,
-                nextLine = "Press Enter to retry the lookup.",
-                summary = state.sourceSummary.ifBlank { state.statusLabel },
-                hint = "Back = exit",
+                nextLine = "Playback control still works from the glasses.",
+                hint = CONTROL_HINT,
             )
         }
 
@@ -164,12 +220,11 @@ class LyricsHudView @JvmOverloads constructor(
                 ?: "Waiting for the first line..."
             val nextLine = state.lines.getOrNull(resolvedIndex + 1)?.text
                 ?.takeIf { it.isNotBlank() }
-                ?: "Next line will appear here."
+                .orEmpty()
             return BodyCopy(
                 currentLine = currentLine,
                 nextLine = nextLine,
-                summary = state.sourceSummary,
-                hint = "Enter = refresh from phone  /  Back = exit",
+                hint = CONTROL_HINT,
             )
         }
 
@@ -180,43 +235,24 @@ class LyricsHudView @JvmOverloads constructor(
         if (plainLines.isNotEmpty()) {
             return BodyCopy(
                 currentLine = plainLines.first(),
-                nextLine = plainLines.getOrNull(1) ?: "Untimed lyrics only for this track.",
-                summary = state.sourceSummary,
-                hint = "No synced timestamps for this track",
+                nextLine = plainLines.getOrNull(1).orEmpty(),
+                hint = CONTROL_HINT,
             )
         }
 
         if (state.trackTitle.isBlank()) {
             return BodyCopy(
                 currentLine = "Start music on the phone.",
-                nextLine = "This app mirrors the phone player over Bluetooth.",
-                summary = state.statusLabel,
-                hint = "Enter = refresh from phone",
+                nextLine = "The glasses only wake up the Bluetooth link while this screen is open.",
+                hint = CONTROL_HINT,
             )
         }
 
         return BodyCopy(
             currentLine = "No synced lyrics for this track.",
-            nextLine = "Try another song or refresh the lookup.",
-            summary = state.sourceSummary,
-            hint = "Enter = retry lookup",
+            nextLine = "Try another song or keep playback on the phone.",
+            hint = CONTROL_HINT,
         )
-    }
-
-    private fun buildStateLabel(state: LyricsGlassesState): String {
-        val transport = when (state.connectionState) {
-            ConnectionState.CONNECTED -> "Bluetooth connected"
-            ConnectionState.CONNECTING -> "Bluetooth connecting"
-            ConnectionState.DISCONNECTED -> "Bluetooth offline"
-        }
-        val playback = when (state.lyricsSessionState) {
-            LyricsSessionState.IDLE -> "Idle"
-            LyricsSessionState.LOADING -> "Loading"
-            LyricsSessionState.READY -> "Ready"
-            LyricsSessionState.PLAYING -> "Playing"
-            LyricsSessionState.ERROR -> "Error"
-        }
-        return "$transport  /  $playback"
     }
 
     private fun shouldAnimate(state: LyricsGlassesState): Boolean =
@@ -319,24 +355,29 @@ class LyricsHudView @JvmOverloads constructor(
         return candidate
     }
 
-    private fun divider() = View(context).apply {
-        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, px(1))
-        setBackgroundColor(COLOR_DIVIDER)
-    }
-
     private fun monoText(sizeSp: Float, color: Int) = TextView(context).apply {
         textSize = sizeSp
         setTextColor(color)
         typeface = Typeface.MONOSPACE
+        includeFontPadding = false
+        isSingleLine = false
+        setHorizontallyScrolling(false)
+        setShadowLayer(shadowRadiusPx(), 0f, 0f, COLOR_SHADOW)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
+            hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NONE
+        }
     }
 
     private fun px(dp: Int): Int =
         (dp * resources.displayMetrics.density + 0.5f).toInt()
 
+    private fun shadowRadiusPx(): Float =
+        6f * resources.displayMetrics.density
+
     private data class BodyCopy(
         val currentLine: String,
         val nextLine: String,
-        val summary: String,
         val hint: String,
     )
 
@@ -345,9 +386,11 @@ class LyricsHudView @JvmOverloads constructor(
         private const val MAX_LOCAL_PLAYBACK_GAP_MS = 60_000L
         private const val HARD_RESYNC_THRESHOLD_MS = 2_000L
         private const val SOFT_FORWARD_CORRECTION_MS = 400L
+        private const val CONTROL_HINT = "Enter play/pause   Back exit"
         private val COLOR_PRIMARY = Color.parseColor("#FFE7A3")
-        private val COLOR_SECONDARY = Color.parseColor("#C8A85B")
-        private val COLOR_DIM = Color.parseColor("#7A6A4A")
-        private val COLOR_DIVIDER = Color.parseColor("#3A2B14")
+        private val COLOR_SECONDARY = Color.parseColor("#D5BB7A")
+        private val COLOR_DIM = Color.parseColor("#A48B59")
+        private val COLOR_HINT = Color.parseColor("#8F7A52")
+        private val COLOR_SHADOW = Color.parseColor("#CC000000")
     }
 }

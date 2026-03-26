@@ -55,9 +55,9 @@ object LyricsPhoneGraph {
         mediaSessionMonitor.refresh()
     }
 
-    fun refreshLyrics() {
+    fun togglePlayback() {
         if (!initialized) return
-        lyricsRuntimeEngine.refresh()
+        mediaSessionMonitor.togglePlayback()
     }
 
     @Synchronized

@@ -2,9 +2,8 @@
     <string name="app_name">Rokid Lyrics Phone</string>
     <string name="notification_channel_name">Rokid Lyrics Bluetooth</string>
     <string name="notification_text">Lyrics Bluetooth runtime is active.</string>
-    <string name="button_notification_access">Notification Access</string>
-    <string name="button_bluetooth_settings">Bluetooth Settings</string>
-    <string name="button_refresh">Refresh Lyrics</string>
-    <string name="phone_header_title">Rokid Lyrics BT</string>
+    <string name="button_notification_access">[ NOTIF ACCESS ]</string>
+    <string name="button_bluetooth_settings">[ BT SETTINGS ]</string>
+    <string name="phone_header_title">[ ROKID LYRICS ]</string>
     <string name="bluetooth_connection_state">Bluetooth: %1$s</string>
 </resources>

@@ -54,7 +54,7 @@ data class LyricsPlaybackSync(
 sealed interface GlassesToPhoneMessage {
     data object RequestSnapshot : GlassesToPhoneMessage
     data object RequestStatus : GlassesToPhoneMessage
-    data object RefreshLyrics : GlassesToPhoneMessage
+    data object TogglePlayback : GlassesToPhoneMessage
 }
 
 sealed interface LyricsEvent {

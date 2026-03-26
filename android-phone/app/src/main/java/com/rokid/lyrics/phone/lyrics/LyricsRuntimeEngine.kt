@@ -1,5 +1,6 @@
 package com.rokid.lyrics.phone.lyrics
 
+import android.os.SystemClock
 import com.rokid.lyrics.contracts.LyricsLine
 import com.rokid.lyrics.contracts.LyricsSessionState
 import com.rokid.lyrics.contracts.LyricsSnapshot
@@ -24,6 +25,8 @@ class LyricsRuntimeEngine(
     private var activeMediaLookupKey: String? = null
     @Volatile private var lookupInFlightKey: String? = null
     private val lookupGeneration = AtomicLong(0L)
+    @Volatile private var lastLookupErrorKey: String? = null
+    @Volatile private var lastLookupErrorAtMs: Long = 0L
 
     fun destroy() {
         lookupJob?.cancel()
@@ -74,6 +77,8 @@ class LyricsRuntimeEngine(
     fun onMediaPlaybackSnapshot(snapshot: MediaPlaybackSnapshot?) {
         if (snapshot == null) {
             activeMediaSnapshot = null
+            activeMediaLookupKey = null
+            cancelLookup()
             val current = stateStore.current().lyrics
             if (current.trackTitle.isBlank()) {
                 stateStore.updateLyrics(
@@ -173,6 +178,9 @@ class LyricsRuntimeEngine(
         lookupJob = scope.launch {
             try {
                 val result = lyricsClient.fetch(normalizedRequest)
+                if (!shouldCommitLookup(generation, requestKey, mediaKey)) {
+                    return@launch
+                }
                 var next = LyricsSnapshot(
                     sessionState = LyricsSessionState.READY,
                     trackTitle = result.trackTitle,
@@ -192,6 +200,7 @@ class LyricsRuntimeEngine(
                 if (mediaKey != null && latestMedia != null && mediaLookupKey(latestMedia) == mediaKey) {
                     next = applyMediaSnapshot(next, latestMedia)
                 }
+                clearLookupError(requestKey)
                 stateStore.updateLyrics(next)
                 stateStore.updateStatus {
                     it.copy(
@@ -206,6 +215,10 @@ class LyricsRuntimeEngine(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
+                if (!shouldCommitLookup(generation, requestKey, mediaKey)) {
+                    return@launch
+                }
+                markLookupError(requestKey)
                 stateStore.updateLyrics(
                     stateStore.current().lyrics.copy(
                         sessionState = LyricsSessionState.ERROR,
@@ -240,9 +253,47 @@ class LyricsRuntimeEngine(
         if (lookupKey != activeMediaLookupKey) return true
         if (lookupInFlightKey == lookupKey) return false
         if (!matchesLoaded) return true
-        if (current.sessionState == LyricsSessionState.ERROR) return false
+        if (current.sessionState == LyricsSessionState.ERROR) {
+            return canRetryFailedLookup(lookupKey)
+        }
         if (current.lines.isNotEmpty() || current.plainLyrics.isNotBlank()) return false
         return current.sessionState == LyricsSessionState.IDLE
+    }
+
+    private fun cancelLookup() {
+        lookupGeneration.incrementAndGet()
+        lookupInFlightKey = null
+        lookupJob?.cancel()
+    }
+
+    private fun shouldCommitLookup(
+        generation: Long,
+        requestKey: String,
+        mediaKey: String?,
+    ): Boolean {
+        if (lookupGeneration.get() != generation) return false
+        if (lookupInFlightKey != requestKey) return false
+        if (mediaKey == null) return true
+        if (activeMediaLookupKey != mediaKey) return false
+        val latestMedia = activeMediaSnapshot ?: return false
+        return mediaLookupKey(latestMedia) == mediaKey
+    }
+
+    private fun markLookupError(requestKey: String) {
+        lastLookupErrorKey = requestKey
+        lastLookupErrorAtMs = SystemClock.elapsedRealtime()
+    }
+
+    private fun clearLookupError(requestKey: String) {
+        if (lastLookupErrorKey == requestKey) {
+            lastLookupErrorKey = null
+            lastLookupErrorAtMs = 0L
+        }
+    }
+
+    private fun canRetryFailedLookup(requestKey: String): Boolean {
+        if (lastLookupErrorKey != requestKey) return true
+        return SystemClock.elapsedRealtime() - lastLookupErrorAtMs >= LOOKUP_ERROR_RETRY_MS
     }
 
     private fun lookupRequestKey(request: LyricsLookupRequest): String =
@@ -298,5 +349,9 @@ class LyricsRuntimeEngine(
         "com.spotify.music" -> "Spotify"
         null, "" -> "media"
         else -> packageName.substringAfterLast('.').replaceFirstChar { it.uppercase() }
+    }
+
+    private companion object {
+        private const val LOOKUP_ERROR_RETRY_MS = 15_000L
     }
 }

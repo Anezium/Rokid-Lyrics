@@ -4,15 +4,19 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
+import android.os.Handler
+import android.os.Looper
 import com.rokid.lyrics.contracts.ConnectionState
 import com.rokid.lyrics.contracts.DeviceStatus
 import com.rokid.lyrics.contracts.GlassesToPhoneMessage
 import com.rokid.lyrics.contracts.LyricsEvent
+import com.rokid.lyrics.contracts.LyricsSessionState
 import com.rokid.lyrics.contracts.LyricsPlaybackSync
 import com.rokid.lyrics.contracts.LyricsSnapshot
 import com.rokid.lyrics.contracts.PhoneToGlassesMessage
 import com.rokid.lyrics.contracts.TransportConstants
 import com.rokid.lyrics.contracts.WireProtocol
+import com.rokid.lyrics.phone.LyricsPhoneGraph
 import com.rokid.lyrics.phone.LyricsPhoneStateStore
 import com.rokid.lyrics.phone.LyricsPhoneViewState
 import com.rokid.lyrics.phone.lyrics.LyricsRuntimeEngine
@@ -24,7 +28,8 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.abs
 
-private const val LYRICS_SYNC_PROGRESS_INTERVAL_MS = 1_000L
+private const val LYRICS_SYNC_DRIFT_TOLERANCE_MS = 1_500L
+private const val BROADCAST_DEBOUNCE_MS = 100L
 
 class LyricsBluetoothServer(
     private val bluetoothAdapter: BluetoothAdapter?,
@@ -38,6 +43,12 @@ class LyricsBluetoothServer(
     private var lastSentStatus: DeviceStatus? = null
     private var lastSentLyricsSnapshot: LyricsSnapshot? = null
     private var lastSentLyricsSync: LyricsPlaybackSync? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var pendingBroadcastState: LyricsPhoneViewState? = null
+    private val scheduledBroadcast = Runnable {
+        pendingBroadcastState?.let { executeBroadcast(it) }
+        pendingBroadcastState = null
+    }
 
     private data class ClientSession(
         val socket: BluetoothSocket,
@@ -56,6 +67,8 @@ class LyricsBluetoothServer(
         running = false
         unsubscribe?.invoke()
         unsubscribe = null
+        mainHandler.removeCallbacks(scheduledBroadcast)
+        pendingBroadcastState = null
         try {
             serverSocket?.close()
         } catch (_: Exception) {
@@ -130,7 +143,7 @@ class LyricsBluetoothServer(
                             send(session.writer, PhoneToGlassesMessage.Status(stateStore.current().deviceStatus))
                         }
 
-                        GlassesToPhoneMessage.RefreshLyrics -> lyricsRuntimeEngine.refresh()
+                        GlassesToPhoneMessage.TogglePlayback -> LyricsPhoneGraph.togglePlayback()
                         null -> Unit
                     }
                 }
@@ -147,6 +160,12 @@ class LyricsBluetoothServer(
     }
 
     private fun broadcastViewState(state: LyricsPhoneViewState) {
+        pendingBroadcastState = state
+        mainHandler.removeCallbacks(scheduledBroadcast)
+        mainHandler.postDelayed(scheduledBroadcast, BROADCAST_DEBOUNCE_MS)
+    }
+
+    private fun executeBroadcast(state: LyricsPhoneViewState) {
         if (clients.isEmpty()) {
             lastSentStatus = state.deviceStatus
             return
@@ -225,7 +244,11 @@ class LyricsBluetoothServer(
         val previous = lastSentLyricsSync ?: return true
         if (sync.sessionState != previous.sessionState) return true
         if (sync.currentLineIndex != previous.currentLineIndex) return true
-        return abs(sync.progressMs - previous.progressMs) >= LYRICS_SYNC_PROGRESS_INTERVAL_MS
+        if (sync.sessionState != LyricsSessionState.PLAYING) return false
+        val elapsedAtSourceMs = sync.capturedAtEpochMs - previous.capturedAtEpochMs
+        if (elapsedAtSourceMs <= 0L) return true
+        val progressDeltaMs = sync.progressMs - previous.progressMs
+        return abs(progressDeltaMs - elapsedAtSourceMs) >= LYRICS_SYNC_DRIFT_TOLERANCE_MS
     }
 
     private fun updateConnectionStatus(message: String, lastError: String? = null) {

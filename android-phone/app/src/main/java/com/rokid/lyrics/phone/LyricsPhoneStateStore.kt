@@ -1,11 +1,14 @@
 package com.rokid.lyrics.phone
 
+import android.os.Handler
+import android.os.Looper
 import com.rokid.lyrics.contracts.DeviceStatus
 import com.rokid.lyrics.contracts.LyricsSnapshot
 
 class LyricsPhoneStateStore {
     private val lock = Any()
     private val listeners = linkedSetOf<(LyricsPhoneViewState) -> Unit>()
+    private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var state = LyricsPhoneViewState()
 
     fun current(): LyricsPhoneViewState = state
@@ -15,7 +18,7 @@ class LyricsPhoneStateStore {
             listeners += listener
             state
         }
-        listener(snapshot)
+        dispatch(listener, snapshot)
         return { synchronized(lock) { listeners -= listener } }
     }
 
@@ -38,6 +41,17 @@ class LyricsPhoneStateStore {
             listeners.toList()
         }
         val dispatched = nextState ?: return
-        listenersSnapshot.forEach { it(dispatched) }
+        listenersSnapshot.forEach { listener -> dispatch(listener, dispatched) }
+    }
+
+    private fun dispatch(
+        listener: (LyricsPhoneViewState) -> Unit,
+        state: LyricsPhoneViewState,
+    ) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            listener(state)
+        } else {
+            mainHandler.post { listener(state) }
+        }
     }
 }

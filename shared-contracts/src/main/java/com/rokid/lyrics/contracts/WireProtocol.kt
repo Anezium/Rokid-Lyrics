@@ -30,18 +30,14 @@ object WireProtocol {
     private fun glassesEnvelopeFor(message: GlassesToPhoneMessage): WireEnvelope = when (message) {
         GlassesToPhoneMessage.RequestSnapshot -> WireEnvelope("runtime", "request_snapshot")
         GlassesToPhoneMessage.RequestStatus -> WireEnvelope("runtime", "request_status")
-        GlassesToPhoneMessage.RefreshLyrics -> WireEnvelope("lyrics", "refresh")
+        GlassesToPhoneMessage.TogglePlayback -> WireEnvelope("runtime", "toggle_playback")
     }
 
     private fun glassesMessageFor(envelope: WireEnvelope): GlassesToPhoneMessage? = when (envelope.channel) {
         "runtime" -> when (envelope.type) {
             "request_snapshot" -> GlassesToPhoneMessage.RequestSnapshot
             "request_status" -> GlassesToPhoneMessage.RequestStatus
-            else -> null
-        }
-
-        "lyrics" -> when (envelope.type) {
-            "refresh" -> GlassesToPhoneMessage.RefreshLyrics
+            "toggle_playback" -> GlassesToPhoneMessage.TogglePlayback
             else -> null
         }
 

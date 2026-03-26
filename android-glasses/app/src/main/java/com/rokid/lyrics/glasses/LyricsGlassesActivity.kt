@@ -5,51 +5,49 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.rokid.lyrics.glasses.bluetooth.LyricsBluetoothBridge
 
 class LyricsGlassesActivity : AppCompatActivity() {
-    private lateinit var connectionStatusView: TextView
     private lateinit var lyricsHudView: LyricsHudView
-    private lateinit var bluetoothBridge: LyricsBluetoothBridge
-    private lateinit var stateStore: LyricsGlassesStateStore
+    private var bluetoothBridge: LyricsBluetoothBridge? = null
+    private var stateStore: LyricsGlassesStateStore? = null
     private var unsubscribe: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_lyrics_glasses)
 
-        connectionStatusView = findViewById(R.id.tvConnectionStatus)
         lyricsHudView = findViewById(R.id.lyricsHudView)
-
-        bluetoothBridge = LyricsBluetoothBridge(applicationContext)
-        stateStore = LyricsGlassesStateStore(bluetoothBridge)
         requestRuntimePermissionsIfNeeded()
     }
 
     override fun onStart() {
         super.onStart()
-        unsubscribe = stateStore.subscribe(::renderState)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (hasRuntimePermissions()) {
-            stateStore.requestSnapshot()
-        }
+        startBridgeIfReady()
     }
 
     override fun onStop() {
         unsubscribe?.invoke()
         unsubscribe = null
+        lyricsHudView.suspendTicker()
+        val shouldKeepOfflineRelay = stateStore?.current()?.let { state ->
+            state.trackTitle.isNotBlank() || state.lines.isNotEmpty() || state.plainLyrics.isNotBlank()
+        } == true
+        if (shouldKeepOfflineRelay) {
+            bluetoothBridge?.hibernate()
+        } else {
+            bluetoothBridge?.pause()
+        }
         super.onStop()
     }
 
     override fun onDestroy() {
-        bluetoothBridge.close()
+        bluetoothBridge?.close()
+        bluetoothBridge = null
+        stateStore = null
         super.onDestroy()
     }
 
@@ -63,7 +61,7 @@ class LyricsGlassesActivity : AppCompatActivity() {
 
                 KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_DPAD_CENTER -> {
-                    stateStore.requestRefresh()
+                    stateStore?.togglePlayback()
                     return true
                 }
             }
@@ -78,13 +76,26 @@ class LyricsGlassesActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_PERMISSIONS && hasRuntimePermissions()) {
-            stateStore.requestSnapshot()
+            startBridgeIfReady()
         }
     }
 
     private fun renderState(state: LyricsGlassesState) {
-        connectionStatusView.text = state.statusLabel
         lyricsHudView.render(state)
+    }
+
+    private fun startBridgeIfReady() {
+        if (!hasRuntimePermissions()) return
+        if (stateStore == null || bluetoothBridge == null) {
+            val bridge = LyricsBluetoothBridge(applicationContext)
+            val store = LyricsGlassesStateStore(bridge)
+            bluetoothBridge = bridge
+            stateStore = store
+        }
+        if (unsubscribe == null) {
+            unsubscribe = stateStore?.subscribe(::renderState)
+        }
+        bluetoothBridge?.resume()
     }
 
     private fun requestRuntimePermissionsIfNeeded() {

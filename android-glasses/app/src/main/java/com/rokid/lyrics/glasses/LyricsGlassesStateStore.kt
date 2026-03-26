@@ -1,5 +1,7 @@
 package com.rokid.lyrics.glasses
 
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import com.rokid.lyrics.contracts.GlassesToPhoneMessage
 import com.rokid.lyrics.contracts.LyricsEvent
@@ -15,11 +17,11 @@ class LyricsGlassesStateStore(
 ) {
     private val lock = Any()
     private val listeners = linkedSetOf<(LyricsGlassesState) -> Unit>()
+    private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var state = LyricsGlassesState()
 
     init {
         bridge.subscribe(::handleMessage)
-        requestSnapshot()
     }
 
     fun current(): LyricsGlassesState = state
@@ -29,7 +31,7 @@ class LyricsGlassesStateStore(
             listeners += listener
             state
         }
-        listener(snapshot)
+        dispatch(listener, snapshot)
         return { synchronized(lock) { listeners -= listener } }
     }
 
@@ -38,8 +40,8 @@ class LyricsGlassesStateStore(
         bridge.send(GlassesToPhoneMessage.RequestSnapshot)
     }
 
-    fun requestRefresh() {
-        bridge.send(GlassesToPhoneMessage.RefreshLyrics)
+    fun togglePlayback() {
+        bridge.send(GlassesToPhoneMessage.TogglePlayback)
     }
 
     private fun handleMessage(message: PhoneToGlassesMessage) {
@@ -63,7 +65,7 @@ class LyricsGlassesStateStore(
             state = nextState
             listenersSnapshot = listeners.toList()
         }
-        listenersSnapshot.forEach { it(nextState) }
+        listenersSnapshot.forEach { listener -> dispatch(listener, nextState) }
     }
 
     private fun handleLyricsEvent(event: LyricsEvent): LyricsGlassesState = when (event) {
@@ -157,5 +159,16 @@ class LyricsGlassesStateStore(
             }
         }
         return candidate
+    }
+
+    private fun dispatch(
+        listener: (LyricsGlassesState) -> Unit,
+        state: LyricsGlassesState,
+    ) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            listener(state)
+        } else {
+            mainHandler.post { listener(state) }
+        }
     }
 }

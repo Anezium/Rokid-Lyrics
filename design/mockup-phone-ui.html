@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rokid Lyrics — Phosphor Glass UI Mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:           #050A05;
+            --phosphor:     #39FF14;
+            --phosphor-mid: #22C20A;
+            --phosphor-dim: #1A8A1A;
+            --card-bg:      #0A1A0A;
+            --text-bright:  #D4FFD4;
+            --text-mid:     #4E8A4E;
+            --text-ghost:   #1C351C;
+            --border:       rgba(57, 255, 20, 0.22);
+            --glow:         rgba(57, 255, 20, 0.12);
+        }
+
+        body {
+            background: #020302;
+            background-image:
+                radial-gradient(ellipse at 50% 100%, rgba(57, 255, 20, 0.04) 0%, transparent 60%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+            gap: 60px;
+            flex-wrap: wrap;
+        }
+
+        /* ─── PHONE FRAME ─── */
+        .phone-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .screen-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.25em;
+            color: rgba(57, 255, 20, 0.35);
+        }
+
+        .phone-frame {
+            width: 375px;
+            background: #0E0E0E;
+            border-radius: 52px;
+            padding: 14px;
+            box-shadow:
+                0 0 0 1px #1a1a1a,
+                0 0 0 3px #0a0a0a,
+                0 50px 100px rgba(0, 0, 0, 0.95),
+                0 0 80px rgba(57, 255, 20, 0.06),
+                inset 0 1px 0 rgba(255,255,255,0.06);
+            position: relative;
+        }
+
+        .phone-side-btn {
+            position: absolute;
+            right: -3px;
+            background: #1a1a1a;
+            border-radius: 0 3px 3px 0;
+        }
+        .phone-side-btn.vol-up   { top: 120px; width: 3px; height: 36px; }
+        .phone-side-btn.vol-down { top: 168px; width: 3px; height: 36px; }
+        .phone-side-btn.power    { top: 140px; width: 3px; height: 60px; left: -3px; border-radius: 3px 0 0 3px; }
+
+        .phone-screen {
+            background: var(--bg);
+            border-radius: 40px;
+            overflow: hidden;
+            height: 812px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Scanlines */
+        .phone-screen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent 0px,
+                transparent 2px,
+                rgba(0, 0, 0, 0.10) 2px,
+                rgba(0, 0, 0, 0.10) 3px
+            );
+            pointer-events: none;
+            z-index: 200;
+        }
+
+        /* Vignette */
+        .phone-screen::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 4, 0, 0.7) 100%);
+            pointer-events: none;
+            z-index: 199;
+        }
+
+        /* Occasional flicker */
+        @keyframes crt-flicker {
+            0%, 97%, 100% { opacity: 1; }
+            97.5% { opacity: 0.88; }
+            98.5% { opacity: 1; }
+            99%   { opacity: 0.94; }
+        }
+        .phone-screen { animation: crt-flicker 12s infinite; }
+
+        /* Sweep scan line */
+        @keyframes sweep {
+            0%   { transform: translateY(-100%); opacity: 0; }
+            5%   { opacity: 1; }
+            95%  { opacity: 1; }
+            100% { transform: translateY(812px); opacity: 0; }
+        }
+        .scan-sweep {
+            position: absolute;
+            left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(180deg, transparent, rgba(57,255,20,0.06), transparent);
+            z-index: 198;
+            animation: sweep 8s linear infinite;
+            pointer-events: none;
+        }
+
+        /* ─── APP CONTENT ─── */
+        .app {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 56px 22px 22px;
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        /* Ambient bottom glow */
+        .app::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 200px;
+            background: radial-gradient(ellipse at 50% 100%, rgba(57,255,20,0.06) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* ─── HEADER ─── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .header-title {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            color: var(--phosphor);
+            letter-spacing: 0.18em;
+            text-shadow:
+                0 0 10px rgba(57,255,20,0.9),
+                0 0 24px rgba(57,255,20,0.4),
+                0 0 40px rgba(57,255,20,0.15);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        @keyframes dot-pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 6px var(--phosphor), 0 0 14px rgba(57,255,20,0.5);
+            }
+            50% {
+                opacity: 0.25;
+                box-shadow: 0 0 3px var(--phosphor);
+            }
+        }
+        .bt-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--phosphor);
+            box-shadow: 0 0 6px var(--phosphor), 0 0 14px rgba(57,255,20,0.5);
+            animation: dot-pulse 1.6s ease-in-out infinite;
+        }
+
+        .bt-count {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 10px;
+            color: var(--phosphor-dim);
+            letter-spacing: 0.12em;
+        }
+
+        /* ─── TRACK CARD ─── */
+        .track-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px 16px 12px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Top glow strip */
+        .track-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 20%; right: 20%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--phosphor), transparent);
+            opacity: 0.55;
+        }
+
+        /* Corner brackets decorative */
+        .track-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 6px;
+            background: radial-gradient(ellipse at 50% 0%, rgba(57,255,20,0.04) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .track-playing-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        @keyframes playing-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .playing-badge {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            color: var(--phosphor);
+            background: rgba(57,255,20,0.08);
+            border: 1px solid rgba(57,255,20,0.28);
+            border-radius: 3px;
+            padding: 2px 8px;
+            animation: playing-blink 2.4s ease-in-out infinite;
+        }
+
+        .track-source-pill {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.1em;
+            color: rgba(57,255,20,0.35);
+            border: 1px solid rgba(57,255,20,0.12);
+            border-radius: 20px;
+            padding: 2px 9px;
+        }
+
+        .track-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-bright);
+            line-height: 1.1;
+            margin-bottom: 3px;
+            text-shadow: 0 0 20px rgba(57,255,20,0.18);
+            letter-spacing: 0.02em;
+        }
+
+        .track-artist {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 14px;
+            font-weight: 400;
+            color: var(--phosphor-dim);
+            letter-spacing: 0.06em;
+            margin-bottom: 12px;
+        }
+
+        /* Progress bar */
+        .progress-bar-wrap {
+            height: 2px;
+            background: rgba(57,255,20,0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        @keyframes progress-anim {
+            from { width: 38%; }
+            to   { width: 42%; }
+        }
+        .progress-bar-fill {
+            height: 100%;
+            width: 38%;
+            background: linear-gradient(90deg, var(--phosphor-dim), var(--phosphor));
+            border-radius: 2px;
+            box-shadow: 0 0 6px rgba(57,255,20,0.6);
+            animation: progress-anim 4s linear infinite alternate;
+        }
+
+        /* ─── LYRICS DIVIDER ─── */
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 22px;
+        }
+        .div-line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(57,255,20,0.2) 50%, transparent);
+        }
+        .div-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.3em;
+            color: rgba(57,255,20,0.3);
+        }
+
+        /* ─── LYRICS STAGE ─── */
+        .lyrics-stage {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+            padding: 0 2px;
+        }
+
+        .lyric {
+            font-family: 'Rajdhani', sans-serif;
+            padding: 8px 14px;
+            border-left: 3px solid transparent;
+            border-radius: 0 4px 4px 0;
+            transition: all 0.4s ease;
+        }
+
+        .lyric-past {
+            font-size: 15px;
+            font-weight: 400;
+            color: var(--text-ghost);
+            letter-spacing: 0.02em;
+            opacity: 0.6;
+        }
+
+        .lyric-current {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-bright);
+            border-left-color: var(--phosphor);
+            background: rgba(57, 255, 20, 0.055);
+            text-shadow:
+                0 0 16px rgba(57,255,20,0.5),
+                0 0 32px rgba(57,255,20,0.2);
+            box-shadow:
+                inset 0 0 40px rgba(57,255,20,0.03),
+                -1px 0 0 rgba(57,255,20,0.1);
+            letter-spacing: 0.01em;
+            margin: 4px 0;
+            padding: 12px 14px;
+        }
+
+        .lyric-next-1 {
+            font-size: 17px;
+            font-weight: 500;
+            color: var(--text-mid);
+            opacity: 0.72;
+            letter-spacing: 0.02em;
+        }
+
+        .lyric-next-2 {
+            font-size: 14px;
+            font-weight: 400;
+            color: var(--text-mid);
+            opacity: 0.32;
+            letter-spacing: 0.02em;
+        }
+
+        /* ─── ACTIONS ─── */
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 9px;
+            margin-top: 22px;
+            margin-bottom: 14px;
+        }
+
+        .btn-outline {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9.5px;
+            letter-spacing: 0.14em;
+            color: var(--phosphor-dim);
+            border: 1px solid rgba(57,255,20,0.2);
+            background: rgba(57,255,20,0.02);
+            border-radius: 3px;
+            padding: 11px 6px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            text-align: center;
+        }
+
+        .btn-outline:hover {
+            color: var(--phosphor);
+            border-color: rgba(57,255,20,0.55);
+            background: rgba(57,255,20,0.07);
+            box-shadow: 0 0 14px rgba(57,255,20,0.15), inset 0 0 8px rgba(57,255,20,0.04);
+        }
+
+        /* ─── STATUS BAR ─── */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid rgba(57,255,20,0.08);
+            padding-top: 11px;
+        }
+
+        .status-seg {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.1em;
+        }
+
+        .status-ok  { color: var(--phosphor); }
+        .status-dim { color: rgba(57,255,20,0.25); }
+        .status-mid { color: var(--phosphor-dim); }
+
+        /* ─── SECOND SCREEN — IDLE STATE ─── */
+        .idle-screen .track-title { color: rgba(57,255,20,0.18); font-style: italic; }
+        .idle-screen .track-artist { color: rgba(57,255,20,0.1); }
+        .idle-screen .playing-badge { opacity: 0; }
+        .idle-screen .lyric-current {
+            color: rgba(57,255,20,0.25);
+            text-shadow: none;
+            font-weight: 400;
+            font-style: italic;
+            border-left-color: rgba(57,255,20,0.15);
+            background: transparent;
+        }
+        .idle-screen .bt-dot { background: #1A8A1A; box-shadow: none; animation: none; }
+
+    </style>
+</head>
+<body>
+
+    <!-- ══════════════ ACTIVE STATE SCREEN ══════════════ -->
+    <div class="phone-wrap">
+        <div class="screen-label">ACTIVE · PLAYING</div>
+        <div class="phone-frame">
+            <div class="phone-side-btn vol-up"></div>
+            <div class="phone-side-btn vol-down"></div>
+            <div class="phone-side-btn power"></div>
+
+            <div class="phone-screen">
+                <div class="scan-sweep"></div>
+                <div class="app">
+
+                    <div class="header">
+                        <div class="header-title">[ ROKID LYRICS ]</div>
+                        <div class="header-right">
+                            <div class="bt-dot"></div>
+                            <div class="bt-count">2 DEVICES</div>
+                        </div>
+                    </div>
+
+                    <div class="track-card">
+                        <div class="track-playing-row">
+                            <div class="playing-badge">▶ PLAYING</div>
+                            <div class="track-source-pill">LRCLIB · 76♪</div>
+                        </div>
+                        <div class="track-title">Bohemian Rhapsody</div>
+                        <div class="track-artist">Queen · 1975</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar-fill"></div>
+                        </div>
+                    </div>
+
+                    <div class="divider">
+                        <div class="div-line"></div>
+                        <div class="div-label">◈ LYRICS ◈</div>
+                        <div class="div-line"></div>
+                    </div>
+
+                    <div class="lyrics-stage">
+                        <div class="lyric lyric-past">Is this the real life?</div>
+                        <div class="lyric lyric-current">Is this just fantasy?</div>
+                        <div class="lyric lyric-next-1">Caught in a landslide,</div>
+                        <div class="lyric lyric-next-2">No escape from reality.</div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn-outline">[ NOTIF ACCESS ]</button>
+                        <button class="btn-outline">[ BT SETTINGS ]</button>
+                    </div>
+
+                    <div class="status-bar">
+                        <span class="status-seg status-ok">NOTIF ✓</span>
+                        <span class="status-seg status-dim">│</span>
+                        <span class="status-seg status-mid">BT: CONNECTED</span>
+                        <span class="status-seg status-dim">│</span>
+                        <span class="status-seg status-mid">2 CLI</span>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════ IDLE / WAITING STATE SCREEN ══════════════ -->
+    <div class="phone-wrap">
+        <div class="screen-label">IDLE · NO MUSIC</div>
+        <div class="phone-frame">
+            <div class="phone-side-btn vol-up"></div>
+            <div class="phone-side-btn vol-down"></div>
+            <div class="phone-side-btn power"></div>
+
+            <div class="phone-screen idle-screen">
+                <div class="scan-sweep"></div>
+                <div class="app">
+
+                    <div class="header">
+                        <div class="header-title">[ ROKID LYRICS ]</div>
+                        <div class="header-right">
+                            <div class="bt-dot"></div>
+                            <div class="bt-count">1 DEVICE</div>
+                        </div>
+                    </div>
+
+                    <div class="track-card">
+                        <div class="track-playing-row">
+                            <div class="playing-badge">■ IDLE</div>
+                            <div class="track-source-pill">NO SOURCE</div>
+                        </div>
+                        <div class="track-title">Waiting for music…</div>
+                        <div class="track-artist">Play something on your phone</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar-fill" style="width:0%; animation:none;"></div>
+                        </div>
+                    </div>
+
+                    <div class="divider">
+                        <div class="div-line"></div>
+                        <div class="div-label">◈ LYRICS ◈</div>
+                        <div class="div-line"></div>
+                    </div>
+
+                    <div class="lyrics-stage">
+                        <div class="lyric lyric-past"></div>
+                        <div class="lyric lyric-current">No active line yet.</div>
+                        <div class="lyric lyric-next-1"></div>
+                        <div class="lyric lyric-next-2"></div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="btn-outline">[ NOTIF ACCESS ]</button>
+                        <button class="btn-outline">[ BT SETTINGS ]</button>
+                    </div>
+
+                    <div class="status-bar">
+                        <span class="status-seg status-ok">NOTIF ✓</span>
+                        <span class="status-seg status-dim">│</span>
+                        <span class="status-seg status-mid">BT: CONNECTED</span>
+                        <span class="status-seg status-dim">│</span>
+                        <span class="status-seg status-mid">1 CLI</span>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

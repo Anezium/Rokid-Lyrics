@@ -1,110 +1,375 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/phosphor_bg">
 
+    <!-- ── HEADER ── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:orientation="horizontal"
+        android:paddingTop="52dp"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:gravity="center_vertical">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/phone_header_title"
-            android:textColor="@android:color/white"
-            android:textSize="24sp"
+            android:textColor="@color/phosphor_primary"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.15"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/tvPermissions"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="#BDBDBD"
-            android:textSize="13sp" />
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <View
+            android:id="@+id/viewBtDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/shape_bt_dot" />
 
         <TextView
-            android:id="@+id/tvStatus"
-            android:layout_width="match_parent"
+            android:id="@+id/tvBtCount"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="@android:color/white"
-            android:textSize="15sp" />
+            android:layout_marginStart="7dp"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.12" />
+    </LinearLayout>
 
-        <TextView
-            android:id="@+id/tvConnection"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="#BDBDBD"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/tvTrack"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:textColor="@android:color/white"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvSummary"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="#BDBDBD"
-            android:textSize="14sp" />
-
-        <TextView
-            android:id="@+id/tvCurrentLine"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:textColor="@android:color/white"
-            android:textSize="22sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/tvNextLine"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textColor="#D4B66A"
-            android:textSize="18sp" />
+    <!-- ── TRACK CARD ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="18dp"
+        android:layout_marginStart="22dp"
+        android:layout_marginEnd="22dp"
+        android:background="@drawable/bg_track_card"
+        android:padding="16dp">
 
         <LinearLayout
-            style="?android:attr/buttonBarStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="10dp">
 
-            <Button
-                style="?android:attr/buttonBarButtonStyle"
-                android:id="@+id/btnNotificationAccess"
-                android:layout_width="0dp"
+            <TextView
+                android:id="@+id/tvPlayingBadge"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/button_notification_access" />
+                android:text="▶ PLAYING"
+                android:textColor="@color/phosphor_primary"
+                android:textSize="9sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.2"
+                android:background="@drawable/bg_badge"
+                android:paddingStart="9dp"
+                android:paddingEnd="9dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp" />
 
-            <Button
-                style="?android:attr/buttonBarButtonStyle"
-                android:id="@+id/btnBluetoothSettings"
+            <Space
                 android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/tvSourcePill"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:text="@string/button_bluetooth_settings" />
+                android:textColor="@color/phosphor_dim"
+                android:textSize="9sp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1"
+                android:background="@drawable/bg_source_pill"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btnRefresh"
+        <TextView
+            android:id="@+id/tvTrackTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/button_refresh" />
+            android:textColor="@color/phosphor_text_bright"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tvArtistName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.05"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <!-- Progress bar -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_marginTop="13dp"
+            android:background="#0D2A0D">
+
+            <View
+                android:id="@+id/viewProgress"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/phosphor_mid"
+                android:scaleX="0"
+                android:pivotX="0" />
+        </FrameLayout>
     </LinearLayout>
-</ScrollView>
+
+    <!-- ── LYRICS DIVIDER ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="22dp"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:gravity="center_vertical">
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:background="@color/phosphor_divider" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="◈ LYRICS ◈"
+            android:textColor="@color/phosphor_divider"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.3"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:background="@color/phosphor_divider" />
+    </LinearLayout>
+
+    <!-- ── LYRICS STAGE (expands to fill) ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+
+        <!-- Past line -->
+        <TextView
+            android:id="@+id/tvPastLine"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="36dp"
+            android:paddingEnd="22dp"
+            android:paddingTop="7dp"
+            android:paddingBottom="7dp"
+            android:textColor="@color/phosphor_text_ghost"
+            android:textSize="15sp"
+            android:alpha="0.7" />
+
+        <!-- Current line with left border -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="2dp"
+            android:background="@color/phosphor_lyric_current_bg">
+
+            <View
+                android:layout_width="3dp"
+                android:layout_height="match_parent"
+                android:background="@color/phosphor_primary" />
+
+            <TextView
+                android:id="@+id/tvCurrentLine"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:paddingStart="17dp"
+                android:paddingEnd="22dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:textColor="@color/phosphor_text_bright"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Next line 1 -->
+        <TextView
+            android:id="@+id/tvNextLine1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="36dp"
+            android:paddingEnd="22dp"
+            android:paddingTop="7dp"
+            android:paddingBottom="7dp"
+            android:textColor="@color/phosphor_text_mid"
+            android:textSize="17sp"
+            android:alpha="0.72" />
+
+        <!-- Next line 2 -->
+        <TextView
+            android:id="@+id/tvNextLine2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="36dp"
+            android:paddingEnd="22dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:textColor="@color/phosphor_text_mid"
+            android:textSize="14sp"
+            android:alpha="0.32" />
+    </LinearLayout>
+
+    <!-- ── SEPARATOR ── -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="22dp"
+        android:layout_marginEnd="22dp"
+        android:background="@color/phosphor_divider" />
+
+    <!-- ── ACTION BUTTONS ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:paddingTop="14dp">
+
+        <Button
+            android:id="@+id/btnNotificationAccess"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/button_notification_access"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.14"
+            android:background="@drawable/btn_outline_green"
+            android:paddingTop="11dp"
+            android:paddingBottom="11dp"
+            android:gravity="center"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false" />
+
+        <Button
+            android:id="@+id/btnBluetoothSettings"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="9dp"
+            android:text="@string/button_bluetooth_settings"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.14"
+            android:background="@drawable/btn_outline_green"
+            android:paddingTop="11dp"
+            android:paddingBottom="11dp"
+            android:gravity="center"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false" />
+    </LinearLayout>
+
+    <!-- ── STATUS BAR ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="28dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tvNotifStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/phosphor_primary"
+            android:textSize="9sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" │ "
+            android:textColor="@color/phosphor_separator"
+            android:textSize="9sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tvConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=" │ "
+            android:textColor="@color/phosphor_separator"
+            android:textSize="9sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/tvClientCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/tvStatusLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/phosphor_divider"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:maxWidth="130dp" />
+    </LinearLayout>
+
+</LinearLayout>
