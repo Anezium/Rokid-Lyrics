@@ -34,7 +34,7 @@ No internet required on the glasses side. No cloud relay. Everything runs locall
 ## Features
 
 - Time-synced lyrics on the AR display, automatically fetched for whatever is playing
-- Works with any Android media player — Spotify, YouTube, Apple Music, etc.
+- (Should) Works with any Android media player - (Only Spotify has been tested)
 - Runs entirely over Bluetooth, no internet needed on the glasses
 - Press Enter on the glasses to play/pause the music on the phone
 
