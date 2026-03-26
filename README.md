@@ -48,7 +48,7 @@ No internet required on the glasses side. No cloud relay. Everything runs locall
 - Connects to the phone over Bluetooth Classic
 - Receives a full lyrics snapshot on connect, advances locally by timer
 - Displays current + next lyric line on the AR overlay
-- Press Enter to force a lyrics refresh from the phone
+- Press Enter (or D-pad center) to play/pause the music on the phone
 - Minimal battery impact — no polling, event-driven updates only
 
 ---
@@ -73,23 +73,6 @@ android-phone/gradlew.bat assembleDebug
 # Glasses APK
 android-glasses/gradlew.bat assembleDebug
 ```
-
----
-
-## GitHub Releases
-
-Push a version tag to trigger an automated build:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-GitHub Actions will build both APKs and attach them to a release automatically:
-- `lyrics-phone-debug.apk`
-- `lyrics-glasses-debug.apk`
-
-> Note: releases are currently debug-signed. For production signing, add a keystore and configure signing secrets in the workflow.
 
 ---
 
