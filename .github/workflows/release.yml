@@ -1,0 +1,46 @@
+name: Release APKs
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build phone APK
+        working-directory: android-phone
+        run: .\gradlew.bat assembleDebug
+
+      - name: Build glasses APK
+        working-directory: android-glasses
+        run: .\gradlew.bat assembleDebug
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            android-phone/app/build/outputs/apk/debug/lyrics-phone-debug.apk
+            android-glasses/app/build/outputs/apk/debug/lyrics-glasses-debug.apk

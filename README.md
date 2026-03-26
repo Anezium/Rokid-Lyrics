@@ -21,6 +21,17 @@ Build:
 - `android-phone\\gradlew.bat assembleDebug`
 - `android-glasses\\gradlew.bat assembleDebug`
 
+GitHub release:
+- Push a version tag, for example `git tag v0.1.0` then `git push origin v0.1.0`
+- GitHub Actions will build both APKs and attach them to a GitHub Release automatically
+- Published assets:
+  - `lyrics-phone-debug.apk`
+  - `lyrics-glasses-debug.apk`
+
+Note:
+- The automated release currently publishes debug-signed APKs
+- If you want store-style signed release APKs, add a release signing config and keystore secrets first
+
 First test flow:
 - Install the phone APK on the Android phone and the glasses APK on the Rokid device
 - Pair the phone and the glasses over Bluetooth at the OS level first
