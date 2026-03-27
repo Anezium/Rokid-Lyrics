@@ -61,6 +61,19 @@ android-phone/gradlew.bat assembleDebug
 android-glasses/gradlew.bat assembleDebug
 ```
 
+## Release signing
+
+Release builds read signing values from environment variables or matching Gradle properties:
+
+- `ANDROID_KEYSTORE_PATH`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `ROKID_LYRICS_VERSION_NAME` (optional)
+- `ROKID_LYRICS_VERSION_CODE` (optional)
+
+Local `assembleRelease` falls back to the debug keystore if those values are absent so you can validate the release path. Tag builds in GitHub Actions require real signing secrets and publish `release.apk` artifacts only.
+
 ---
 
 ## First run
@@ -72,4 +85,4 @@ android-glasses/gradlew.bat assembleDebug
 5. Start playing music on the phone (Spotify, YouTube, etc.)
 6. Open the glasses app and wait for the status to show **CONNECTED**
 7. Lyrics will appear on the glasses display within a few seconds
-8. Press Enter on the glasses to force-refresh lyrics at any time
+8. Press Enter on the glasses to play or pause the phone playback

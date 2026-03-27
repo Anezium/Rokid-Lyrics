@@ -14,6 +14,7 @@ import com.rokid.lyrics.contracts.LyricsSessionState
 import com.rokid.lyrics.contracts.LyricsPlaybackSync
 import com.rokid.lyrics.contracts.LyricsSnapshot
 import com.rokid.lyrics.contracts.PhoneToGlassesMessage
+import com.rokid.lyrics.contracts.ProtocolHelloAck
 import com.rokid.lyrics.contracts.TransportConstants
 import com.rokid.lyrics.contracts.WireProtocol
 import com.rokid.lyrics.phone.LyricsPhoneGraph
@@ -35,11 +36,12 @@ class LyricsBluetoothServer(
     private val bluetoothAdapter: BluetoothAdapter?,
     private val stateStore: LyricsPhoneStateStore,
     private val lyricsRuntimeEngine: LyricsRuntimeEngine,
+    private val appVersion: String,
 ) {
     private val clients = CopyOnWriteArrayList<ClientSession>()
     @Volatile private var running = false
     private var unsubscribe: (() -> Unit)? = null
-    private var serverSocket: BluetoothServerSocket? = null
+    @Volatile private var serverSocket: BluetoothServerSocket? = null
     private var lastSentStatus: DeviceStatus? = null
     private var lastSentLyricsSnapshot: LyricsSnapshot? = null
     private var lastSentLyricsSync: LyricsPlaybackSync? = null
@@ -50,11 +52,13 @@ class LyricsBluetoothServer(
         pendingBroadcastState = null
     }
 
-    private data class ClientSession(
+    private class ClientSession(
         val socket: BluetoothSocket,
         val writer: BufferedWriter,
+        @Volatile var handshakeComplete: Boolean = false,
     )
 
+    @Synchronized
     fun startServing() {
         if (running) return
         running = true
@@ -63,6 +67,7 @@ class LyricsBluetoothServer(
         startServerLoop()
     }
 
+    @Synchronized
     fun stopServing() {
         running = false
         unsubscribe?.invoke()
@@ -89,6 +94,7 @@ class LyricsBluetoothServer(
         Thread {
             val adapter = bluetoothAdapter
             if (adapter == null) {
+                running = false
                 updateConnectionStatus("Bluetooth adapter unavailable.", "Bluetooth adapter unavailable.")
                 return@Thread
             }
@@ -106,8 +112,8 @@ class LyricsBluetoothServer(
                         val writer = BufferedWriter(OutputStreamWriter(client.outputStream, Charsets.UTF_8))
                         val session = ClientSession(client, writer)
                         clients += session
-                        updateConnectionStatus("Glasses connected over Bluetooth.")
-                        sendViewState(session, stateStore.current())
+                        updateConnectionStatus("Bluetooth client connected. Negotiating protocol...")
+                        startHandshakeTimeout(session)
                         startReader(session)
                     }
                 } catch (t: Throwable) {
@@ -138,25 +144,73 @@ class LyricsBluetoothServer(
                 while (running) {
                     val line = reader.readLine() ?: break
                     when (val message = WireProtocol.decodeGlassesMessageOrNull(line)) {
-                        GlassesToPhoneMessage.RequestSnapshot -> sendViewState(session, stateStore.current())
+                        is GlassesToPhoneMessage.Hello -> {
+                            if (!completeHandshake(session, message.hello.protocolVersion)) {
+                                return@Thread
+                            }
+                        }
+
+                        GlassesToPhoneMessage.RequestSnapshot -> {
+                            if (!session.handshakeComplete) {
+                                disconnectSession(session, PROTOCOL_MISMATCH_STATUS, PROTOCOL_MISMATCH_ERROR)
+                                return@Thread
+                            }
+                            sendViewState(session, stateStore.current())
+                        }
+
                         GlassesToPhoneMessage.RequestStatus -> {
+                            if (!session.handshakeComplete) {
+                                disconnectSession(session, PROTOCOL_MISMATCH_STATUS, PROTOCOL_MISMATCH_ERROR)
+                                return@Thread
+                            }
                             send(session.writer, PhoneToGlassesMessage.Status(stateStore.current().deviceStatus))
                         }
 
-                        GlassesToPhoneMessage.TogglePlayback -> LyricsPhoneGraph.togglePlayback()
-                        null -> Unit
+                        GlassesToPhoneMessage.TogglePlayback -> {
+                            if (!session.handshakeComplete) {
+                                disconnectSession(session, PROTOCOL_MISMATCH_STATUS, PROTOCOL_MISMATCH_ERROR)
+                                return@Thread
+                            }
+                            LyricsPhoneGraph.togglePlayback()
+                        }
+
+                        null -> {
+                            disconnectSession(session, INVALID_MESSAGE_STATUS, INVALID_MESSAGE_ERROR)
+                            return@Thread
+                        }
                     }
                 }
             } catch (_: Exception) {
             } finally {
-                clients.remove(session)
-                try {
-                    session.socket.close()
-                } catch (_: Exception) {
-                }
-                updateConnectionStatus("Glasses disconnected. Waiting for Bluetooth reconnection.")
+                disconnectSession(session, "Glasses disconnected. Waiting for Bluetooth reconnection.")
             }
         }.start()
+    }
+
+    private fun completeHandshake(session: ClientSession, remoteProtocolVersion: Int): Boolean {
+        if (remoteProtocolVersion != TransportConstants.PROTOCOL_VERSION) {
+            disconnectSession(
+                session,
+                "Incompatible glasses protocol version.",
+                "Update the phone and glasses apps to the same version.",
+            )
+            return false
+        }
+        session.handshakeComplete = true
+        val ack = PhoneToGlassesMessage.HelloAck(
+            ProtocolHelloAck(
+                protocolVersion = TransportConstants.PROTOCOL_VERSION,
+                appVersion = appVersion,
+                capabilities = PHONE_CAPABILITIES,
+            )
+        )
+        if (!send(session.writer, ack)) {
+            disconnectSession(session, "Protocol handshake failed.", "Unable to reply to the glasses handshake.")
+            return false
+        }
+        updateConnectionStatus("Glasses connected over Bluetooth.")
+        sendViewState(session, stateStore.current())
+        return true
     }
 
     private fun broadcastViewState(state: LyricsPhoneViewState) {
@@ -166,7 +220,7 @@ class LyricsBluetoothServer(
     }
 
     private fun executeBroadcast(state: LyricsPhoneViewState) {
-        if (clients.isEmpty()) {
+        if (connectedClientCount() == 0) {
             lastSentStatus = state.deviceStatus
             return
         }
@@ -198,16 +252,13 @@ class LyricsBluetoothServer(
     private fun broadcastPhoneMessage(message: PhoneToGlassesMessage) {
         val dead = mutableListOf<ClientSession>()
         clients.forEach { session ->
+            if (!session.handshakeComplete) return@forEach
             if (!send(session.writer, message)) {
                 dead += session
             }
         }
         dead.forEach { session ->
-            clients.remove(session)
-            try {
-                session.socket.close()
-            } catch (_: Exception) {
-            }
+            disconnectSession(session)
         }
         if (dead.isNotEmpty()) {
             updateConnectionStatus("Bluetooth client disconnected. Waiting for reconnection.")
@@ -252,21 +303,65 @@ class LyricsBluetoothServer(
     }
 
     private fun updateConnectionStatus(message: String, lastError: String? = null) {
+        val connectedClients = connectedClientCount()
         stateStore.updateStatus { current ->
             current.copy(
                 connectionState = when {
-                    clients.isNotEmpty() -> ConnectionState.CONNECTED
+                    connectedClients > 0 -> ConnectionState.CONNECTED
                     running -> ConnectionState.CONNECTING
                     else -> ConnectionState.DISCONNECTED
                 },
-                bluetoothClientCount = clients.size,
+                bluetoothClientCount = connectedClients,
                 statusLabel = message,
-                lastError = lastError ?: current.lastError,
+                lastError = lastError,
             )
         }
     }
 
+    private fun connectedClientCount(): Int =
+        clients.count { it.handshakeComplete }
+
+    private fun disconnectSession(
+        session: ClientSession,
+        statusMessage: String? = null,
+        lastError: String? = null,
+    ) {
+        val removed = clients.remove(session)
+        runCatching { session.socket.close() }
+        if (removed && statusMessage != null) {
+            updateConnectionStatus(statusMessage, lastError)
+        }
+    }
+
+    private fun startHandshakeTimeout(session: ClientSession) {
+        Thread {
+            try {
+                Thread.sleep(HANDSHAKE_TIMEOUT_MS)
+            } catch (_: InterruptedException) {
+            }
+            if (!running || session.handshakeComplete || !clients.contains(session)) {
+                return@Thread
+            }
+            send(
+                session.writer,
+                PhoneToGlassesMessage.Error(PROTOCOL_MISMATCH_ERROR),
+            )
+            disconnectSession(session, PROTOCOL_MISMATCH_STATUS, PROTOCOL_MISMATCH_ERROR)
+        }.start()
+    }
+
     private companion object {
         private const val RESTART_DELAY_MS = 2500L
+        private const val HANDSHAKE_TIMEOUT_MS = 3500L
+        private const val PROTOCOL_MISMATCH_STATUS = "Bluetooth client uses an incompatible Lyrics protocol."
+        private const val PROTOCOL_MISMATCH_ERROR = "Update the phone and glasses apps to the same version."
+        private const val INVALID_MESSAGE_STATUS = "Bluetooth client sent an invalid message."
+        private const val INVALID_MESSAGE_ERROR = "Reconnect the glasses after updating both apps."
+        private val PHONE_CAPABILITIES = listOf(
+            "status",
+            "lyrics_snapshot",
+            "lyrics_sync",
+            "toggle_playback",
+        )
     }
 }

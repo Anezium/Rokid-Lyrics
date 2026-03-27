@@ -11,6 +11,7 @@ import com.rokid.lyrics.contracts.ConnectionState
 import com.rokid.lyrics.contracts.DeviceStatus
 import com.rokid.lyrics.contracts.GlassesToPhoneMessage
 import com.rokid.lyrics.contracts.PhoneToGlassesMessage
+import com.rokid.lyrics.contracts.ProtocolHello
 import com.rokid.lyrics.contracts.TransportConstants
 import com.rokid.lyrics.contracts.WireProtocol
 import java.io.BufferedReader
@@ -24,15 +25,24 @@ import java.util.concurrent.CopyOnWriteArraySet
 class LyricsBluetoothBridge(
     private val context: Context,
 ) {
+    private data class DisconnectStatus(
+        val connectionState: ConnectionState,
+        val label: String,
+        val lastError: String? = null,
+    )
+
     private val listeners = CopyOnWriteArraySet<(PhoneToGlassesMessage) -> Unit>()
     private val pendingMessages = CopyOnWriteArrayList<GlassesToPhoneMessage>()
     private val controlLock = Object()
     @Volatile private var closed = false
     @Volatile private var active = false
     @Volatile private var hibernating = false
+    @Volatile private var handshakeComplete = false
     @Volatile private var socket: BluetoothSocket? = null
     @Volatile private var writer: BufferedWriter? = null
     @Volatile private var connectThread: Thread? = null
+    @Volatile private var remoteDeviceName: String? = null
+    @Volatile private var pendingDisconnectStatus: DisconnectStatus? = null
 
     fun resume() {
         if (closed) return
@@ -132,14 +142,27 @@ class LyricsBluetoothBridge(
 
                     socket = candidate
                     writer = BufferedWriter(OutputStreamWriter(candidate.outputStream, Charsets.UTF_8))
-                    if (active) {
-                        emitStatus(
-                            ConnectionState.CONNECTED,
-                            "Connected to ${safeName(candidate.remoteDevice)} via Bluetooth.",
+                    remoteDeviceName = safeName(candidate.remoteDevice)
+                    handshakeComplete = false
+                    pendingDisconnectStatus = null
+                    emitStatus(
+                        ConnectionState.CONNECTING,
+                        "Connected to ${remoteDeviceName.orEmpty()}. Negotiating Lyrics protocol...",
+                    )
+                    if (!sendRaw(handshakeMessage())) {
+                        val disconnectStatus = DisconnectStatus(
+                            connectionState = ConnectionState.DISCONNECTED,
+                            label = "Unable to start the Lyrics protocol handshake.",
+                            lastError = "Reconnect after updating both apps to the same version.",
                         )
+                        pendingDisconnectStatus = disconnectStatus
+                        closeSocket()
+                        emitStatus(disconnectStatus.connectionState, disconnectStatus.label, disconnectStatus.lastError)
+                        sleep(RECONNECT_DELAY_MS)
+                        continue
                     }
-                    flushPending()
                     startReader(candidate)
+                    startHandshakeTimeout(candidate)
                     if (active) {
                         sleep(RECONNECT_DELAY_MS)
                     } else {
@@ -210,9 +233,22 @@ class LyricsBluetoothBridge(
                 val reader = BufferedReader(InputStreamReader(activeSocket.inputStream, Charsets.UTF_8))
                 while (!closed) {
                     val line = reader.readLine() ?: break
-                    WireProtocol.decodePhoneMessageOrNull(line)?.let { message ->
-                        listeners.forEach { it(message) }
+                    val message = WireProtocol.decodePhoneMessageOrNull(line)
+                    if (message == null) {
+                        pendingDisconnectStatus = DisconnectStatus(
+                            connectionState = ConnectionState.DISCONNECTED,
+                            label = "Received an unsupported phone message.",
+                            lastError = "Update the phone and glasses apps to matching versions.",
+                        )
+                        break
                     }
+                    if (!handshakeComplete) {
+                        if (!handlePreHandshakeMessage(message)) {
+                            break
+                        }
+                        continue
+                    }
+                    listeners.forEach { it(message) }
                 }
             } catch (_: Exception) {
             } finally {
@@ -221,8 +257,54 @@ class LyricsBluetoothBridge(
         }.start()
     }
 
+    private fun handlePreHandshakeMessage(message: PhoneToGlassesMessage): Boolean {
+        return when (message) {
+            is PhoneToGlassesMessage.HelloAck -> {
+                if (message.ack.protocolVersion != TransportConstants.PROTOCOL_VERSION) {
+                    pendingDisconnectStatus = DisconnectStatus(
+                        connectionState = ConnectionState.DISCONNECTED,
+                        label = "Connected phone app uses an incompatible Lyrics protocol.",
+                        lastError = "Update the phone and glasses apps to the same version.",
+                    )
+                    false
+                } else {
+                    handshakeComplete = true
+                    pendingDisconnectStatus = null
+                    emitStatus(
+                        ConnectionState.CONNECTED,
+                        "Connected to ${remoteDeviceName.orEmpty()} via Bluetooth.",
+                    )
+                    flushPending()
+                    true
+                }
+            }
+
+            is PhoneToGlassesMessage.Error -> {
+                pendingDisconnectStatus = DisconnectStatus(
+                    connectionState = ConnectionState.DISCONNECTED,
+                    label = message.message,
+                    lastError = message.message,
+                )
+                false
+            }
+
+            else -> {
+                pendingDisconnectStatus = DisconnectStatus(
+                    connectionState = ConnectionState.DISCONNECTED,
+                    label = "Connected phone app uses an incompatible Lyrics protocol.",
+                    lastError = "Update the phone and glasses apps to the same version.",
+                )
+                false
+            }
+        }
+    }
+
     private fun trySend(message: GlassesToPhoneMessage): Boolean {
-        if (!active) return false
+        if (!active || !handshakeComplete) return false
+        return sendRaw(message)
+    }
+
+    private fun sendRaw(message: GlassesToPhoneMessage): Boolean {
         val activeWriter = writer ?: return false
         return try {
             activeWriter.write(WireProtocol.encodeGlassesMessage(message))
@@ -236,13 +318,14 @@ class LyricsBluetoothBridge(
     }
 
     private fun shouldQueue(message: GlassesToPhoneMessage): Boolean = when (message) {
+        is GlassesToPhoneMessage.Hello -> false
         GlassesToPhoneMessage.RequestSnapshot,
         GlassesToPhoneMessage.RequestStatus -> true
         GlassesToPhoneMessage.TogglePlayback -> false
     }
 
     private fun flushPending() {
-        if ((!active && !hibernating) || pendingMessages.isEmpty()) return
+        if ((!active && !hibernating) || !handshakeComplete || pendingMessages.isEmpty()) return
         val drain = pendingMessages.toList()
         pendingMessages.clear()
         drain.forEach { message ->
@@ -253,8 +336,26 @@ class LyricsBluetoothBridge(
     }
 
     private fun handleDisconnect() {
-        closeSocket()
-        if (!closed && active) {
+        val disconnectStatus: DisconnectStatus?
+        val shouldEmitReconnect: Boolean
+        synchronized(controlLock) {
+            disconnectStatus = pendingDisconnectStatus
+            pendingDisconnectStatus = null
+            val hadActiveLink =
+                socket != null ||
+                    writer != null ||
+                    remoteDeviceName != null ||
+                    handshakeComplete
+            if (hadActiveLink) {
+                closeSocket()
+            }
+            shouldEmitReconnect = hadActiveLink && !closed && disconnectStatus == null && active
+        }
+        if (!closed && disconnectStatus != null) {
+            emitStatus(disconnectStatus.connectionState, disconnectStatus.label, disconnectStatus.lastError)
+            return
+        }
+        if (shouldEmitReconnect) {
             emitStatus(ConnectionState.CONNECTING, "Bluetooth link lost. Reconnecting to the phone...")
         }
     }
@@ -264,20 +365,57 @@ class LyricsBluetoothBridge(
             socket?.close()
         } catch (_: Exception) {
         }
+        handshakeComplete = false
         socket = null
         writer = null
+        remoteDeviceName = null
     }
 
-    private fun emitStatus(connectionState: ConnectionState, label: String) {
+    private fun emitStatus(
+        connectionState: ConnectionState,
+        label: String,
+        lastError: String? = null,
+    ) {
         val message = PhoneToGlassesMessage.Status(
             DeviceStatus(
                 connectionState = connectionState,
                 statusLabel = label,
                 bluetoothClientCount = if (connectionState == ConnectionState.CONNECTED) 1 else 0,
+                lastError = lastError,
             ),
         )
         listeners.forEach { it(message) }
     }
+
+    private fun handshakeMessage(): GlassesToPhoneMessage =
+        GlassesToPhoneMessage.Hello(
+            ProtocolHello(
+                protocolVersion = TransportConstants.PROTOCOL_VERSION,
+                appVersion = appVersionName(),
+                capabilities = GLASSES_CAPABILITIES,
+            )
+        )
+
+    private fun startHandshakeTimeout(activeSocket: BluetoothSocket) {
+        Thread {
+            sleep(HANDSHAKE_TIMEOUT_MS)
+            if (closed || handshakeComplete || socket != activeSocket) {
+                return@Thread
+            }
+            pendingDisconnectStatus = DisconnectStatus(
+                connectionState = ConnectionState.DISCONNECTED,
+                label = "Connected phone app did not complete the Lyrics handshake.",
+                lastError = "Update the phone and glasses apps to the same version.",
+            )
+            handleDisconnect()
+        }.start()
+    }
+
+    private fun appVersionName(): String =
+        runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty().ifBlank { "unknown" }
 
     @SuppressLint("MissingPermission")
     private fun safeName(device: BluetoothDevice): String =
@@ -287,5 +425,11 @@ class LyricsBluetoothBridge(
         private const val RECONNECT_DELAY_MS = 2500L
         private const val HIBERNATE_REFRESH_INTERVAL_MS = 20_000L
         private const val HIBERNATE_CONNECTED_WINDOW_MS = 3_500L
+        private const val HANDSHAKE_TIMEOUT_MS = 3500L
+        private val GLASSES_CAPABILITIES = listOf(
+            "request_status",
+            "request_snapshot",
+            "toggle_playback",
+        )
     }
 }

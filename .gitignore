@@ -8,6 +8,9 @@ captures/
 *.apk
 *.aab
 *.ap_
+*.jks
+*.keystore
 
 out/
 bin/
+signing/

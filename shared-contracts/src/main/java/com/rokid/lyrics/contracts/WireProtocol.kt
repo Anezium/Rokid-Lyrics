@@ -28,6 +28,7 @@ object WireProtocol {
             ?.let(::phoneMessageFor)
 
     private fun glassesEnvelopeFor(message: GlassesToPhoneMessage): WireEnvelope = when (message) {
+        is GlassesToPhoneMessage.Hello -> WireEnvelope("runtime", "hello", gson.toJson(message.hello))
         GlassesToPhoneMessage.RequestSnapshot -> WireEnvelope("runtime", "request_snapshot")
         GlassesToPhoneMessage.RequestStatus -> WireEnvelope("runtime", "request_status")
         GlassesToPhoneMessage.TogglePlayback -> WireEnvelope("runtime", "toggle_playback")
@@ -35,6 +36,7 @@ object WireProtocol {
 
     private fun glassesMessageFor(envelope: WireEnvelope): GlassesToPhoneMessage? = when (envelope.channel) {
         "runtime" -> when (envelope.type) {
+            "hello" -> parsePayload(envelope, ProtocolHello::class.java)?.let { GlassesToPhoneMessage.Hello(it) }
             "request_snapshot" -> GlassesToPhoneMessage.RequestSnapshot
             "request_status" -> GlassesToPhoneMessage.RequestStatus
             "toggle_playback" -> GlassesToPhoneMessage.TogglePlayback
@@ -45,6 +47,7 @@ object WireProtocol {
     }
 
     private fun phoneEnvelopeFor(message: PhoneToGlassesMessage): WireEnvelope = when (message) {
+        is PhoneToGlassesMessage.HelloAck -> WireEnvelope("runtime", "hello_ack", gson.toJson(message.ack))
         is PhoneToGlassesMessage.Status -> WireEnvelope("runtime", "status", gson.toJson(message.status))
         is PhoneToGlassesMessage.Lyrics -> when (val event = message.event) {
             is LyricsEvent.Snapshot -> WireEnvelope("lyrics", "snapshot", gson.toJson(event.snapshot))
@@ -57,6 +60,7 @@ object WireProtocol {
 
     private fun phoneMessageFor(envelope: WireEnvelope): PhoneToGlassesMessage? = when (envelope.channel) {
         "runtime" -> when (envelope.type) {
+            "hello_ack" -> parsePayload(envelope, ProtocolHelloAck::class.java)?.let { PhoneToGlassesMessage.HelloAck(it) }
             "status" -> parsePayload(envelope, DeviceStatus::class.java)?.let { PhoneToGlassesMessage.Status(it) }
             "error" -> parsePayload(envelope, PhoneToGlassesMessage.Error::class.java)
             else -> null

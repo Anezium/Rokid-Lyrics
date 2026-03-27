@@ -51,7 +51,20 @@ data class LyricsPlaybackSync(
     val currentLineIndex: Int = -1,
 )
 
+data class ProtocolHello(
+    val protocolVersion: Int = TransportConstants.PROTOCOL_VERSION,
+    val appVersion: String = "",
+    val capabilities: List<String> = emptyList(),
+)
+
+data class ProtocolHelloAck(
+    val protocolVersion: Int = TransportConstants.PROTOCOL_VERSION,
+    val appVersion: String = "",
+    val capabilities: List<String> = emptyList(),
+)
+
 sealed interface GlassesToPhoneMessage {
+    data class Hello(val hello: ProtocolHello) : GlassesToPhoneMessage
     data object RequestSnapshot : GlassesToPhoneMessage
     data object RequestStatus : GlassesToPhoneMessage
     data object TogglePlayback : GlassesToPhoneMessage
@@ -64,6 +77,7 @@ sealed interface LyricsEvent {
 }
 
 sealed interface PhoneToGlassesMessage {
+    data class HelloAck(val ack: ProtocolHelloAck) : PhoneToGlassesMessage
     data class Status(val status: DeviceStatus) : PhoneToGlassesMessage
     data class Lyrics(val event: LyricsEvent) : PhoneToGlassesMessage
     data class Error(val message: String) : PhoneToGlassesMessage

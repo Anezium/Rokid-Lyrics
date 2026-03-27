@@ -36,6 +36,7 @@ object LyricsPhoneGraph {
             bluetoothAdapter = (appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter,
             stateStore = stateStore,
             lyricsRuntimeEngine = lyricsRuntimeEngine,
+            appVersion = appVersionName(appContext),
         )
         initialized = true
         syncNotificationAccessFlag()
@@ -86,4 +87,10 @@ object LyricsPhoneGraph {
             )
         }
     }
+
+    private fun appVersionName(context: Context): String =
+        runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty().ifBlank { "unknown" }
 }

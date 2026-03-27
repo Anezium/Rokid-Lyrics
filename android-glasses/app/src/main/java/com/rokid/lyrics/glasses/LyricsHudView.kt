@@ -189,6 +189,14 @@ class LyricsHudView @JvmOverloads constructor(
     }
 
     private fun bodyCopy(state: LyricsGlassesState): BodyCopy {
+        state.errorMessage?.takeIf { it.isNotBlank() }?.let { error ->
+            return BodyCopy(
+                currentLine = error,
+                nextLine = "Playback control still works from the glasses.",
+                hint = CONTROL_HINT,
+            )
+        }
+
         if (state.connectionState != ConnectionState.CONNECTED && state.trackTitle.isBlank()) {
             return BodyCopy(
                 currentLine = "Waiting for the phone Bluetooth link.",
@@ -201,14 +209,6 @@ class LyricsHudView @JvmOverloads constructor(
             return BodyCopy(
                 currentLine = "Loading lyrics...",
                 nextLine = "",
-                hint = CONTROL_HINT,
-            )
-        }
-
-        state.errorMessage?.takeIf { it.isNotBlank() }?.let { error ->
-            return BodyCopy(
-                currentLine = error,
-                nextLine = "Playback control still works from the glasses.",
                 hint = CONTROL_HINT,
             )
         }

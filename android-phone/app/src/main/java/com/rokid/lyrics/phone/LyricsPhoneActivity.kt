@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.startForegroundService
+import com.rokid.lyrics.contracts.LyricsSessionState
 
 class LyricsPhoneActivity : AppCompatActivity() {
 
@@ -131,8 +132,14 @@ class LyricsPhoneActivity : AppCompatActivity() {
         }
 
         // Playing badge
-        val isPlaying = state.lyrics.trackTitle.isNotBlank()
-        tvPlayingBadge.text = if (isPlaying) "▶ PLAYING" else "■  IDLE"
+        val isPlaying = state.lyrics.sessionState == LyricsSessionState.PLAYING
+        tvPlayingBadge.text = when (state.lyrics.sessionState) {
+            LyricsSessionState.PLAYING -> "> PLAYING"
+            LyricsSessionState.READY -> "|| PAUSED"
+            LyricsSessionState.LOADING -> ".. LOADING"
+            LyricsSessionState.ERROR -> "!! ERROR"
+            LyricsSessionState.IDLE -> "[] IDLE"
+        }
         tvPlayingBadge.setTextColor(
             ContextCompat.getColor(
                 this,

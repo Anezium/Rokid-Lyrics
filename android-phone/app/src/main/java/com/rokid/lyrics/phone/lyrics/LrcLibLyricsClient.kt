@@ -5,11 +5,15 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.rokid.lyrics.contracts.LyricsLine
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.util.concurrent.TimeUnit
 
 data class LyricsLookupRequest(
     val title: String,
@@ -31,7 +35,12 @@ data class LyricsFetchResult(
 )
 
 class LrcLibLyricsClient(
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .callTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build(),
 ) {
     suspend fun fetch(request: LyricsLookupRequest): LyricsFetchResult = withContext(Dispatchers.IO) {
         val exact = fetchTrack("/api/get-cached", request)
@@ -69,14 +78,59 @@ class LrcLibLyricsClient(
             if (!response.isSuccessful) return null
             val body = response.body?.string()?.takeIf { it.isNotBlank() } ?: return null
             val candidates = runCatching { JsonParser.parseString(body).asJsonArray }.getOrNull() ?: return null
-            return pickSearchCandidate(candidates)
+            return pickSearchCandidate(candidates, request)
         }
     }
 
-    private fun pickSearchCandidate(candidates: JsonArray): JsonObject? {
-        val synced = candidates.mapNotNull { it.asJsonObjectOrNull() }
-            .firstOrNull { candidate -> candidate.stringOrNull("syncedLyrics").isNullOrBlank().not() }
-        return synced ?: candidates.firstOrNull()?.asJsonObjectOrNull()
+    internal fun pickSearchCandidate(candidates: JsonArray, request: LyricsLookupRequest): JsonObject? =
+        candidates
+            .mapNotNull { it.asJsonObjectOrNull() }
+            .mapNotNull { candidate ->
+                candidateScore(candidate, request)?.let { score -> candidate to score }
+            }
+            .maxByOrNull { (_, score) -> score }
+            ?.first
+
+    private fun candidateScore(candidate: JsonObject, request: LyricsLookupRequest): Int? {
+        val titleScore = textMatchScore(request.title, candidate.stringOrNull("trackName").orEmpty())
+        val artistScore = textMatchScore(request.artist, candidate.stringOrNull("artistName").orEmpty())
+        if (titleScore < MIN_TITLE_MATCH_SCORE || artistScore < MIN_ARTIST_MATCH_SCORE) {
+            return null
+        }
+
+        var score = titleScore * 3 + artistScore * 2
+
+        val album = request.album.trim()
+        if (album.isNotBlank()) {
+            score += textMatchScore(album, candidate.stringOrNull("albumName").orEmpty()) / 2
+        }
+
+        if (!candidate.stringOrNull("syncedLyrics").isNullOrBlank()) {
+            score += 35
+        } else if (!candidate.stringOrNull("plainLyrics").isNullOrBlank()) {
+            score += 10
+        } else {
+            score -= 25
+        }
+
+        val durationDelta = durationDeltaSeconds(request.durationSeconds, candidate.intOrNull("duration"))
+        score += when {
+            durationDelta == null -> 0
+            durationDelta <= 1 -> 25
+            durationDelta <= 3 -> 15
+            durationDelta <= 6 -> 5
+            durationDelta >= 20 -> -40
+            else -> -10
+        }
+
+        if (normalizedComparable(request.title) == normalizedComparable(candidate.stringOrNull("trackName").orEmpty())) {
+            score += 40
+        }
+        if (normalizedComparable(request.artist) == normalizedComparable(candidate.stringOrNull("artistName").orEmpty())) {
+            score += 30
+        }
+
+        return score
     }
 
     private fun parseTrack(track: JsonObject, request: LyricsLookupRequest): LyricsFetchResult {
@@ -146,8 +200,48 @@ class LrcLibLyricsClient(
     private fun JsonObject.booleanOrFalse(key: String): Boolean =
         get(key)?.takeIf { !it.isJsonNull }?.asBoolean ?: false
 
+    private fun textMatchScore(request: String, candidate: String): Int {
+        val normalizedRequest = normalizedComparable(request)
+        val normalizedCandidate = normalizedComparable(candidate)
+        if (normalizedRequest.isBlank() || normalizedCandidate.isBlank()) return 0
+        if (normalizedRequest == normalizedCandidate) return 100
+        if (normalizedCandidate.contains(normalizedRequest) || normalizedRequest.contains(normalizedCandidate)) {
+            return 88
+        }
+
+        val requestTokens = normalizedRequest.split(' ').filter { it.isNotBlank() }
+        val candidateTokens = normalizedCandidate.split(' ').filter { it.isNotBlank() }
+        if (requestTokens.isEmpty() || candidateTokens.isEmpty()) return 0
+
+        val sharedTokens = requestTokens.toSet().intersect(candidateTokens.toSet()).size
+        if (sharedTokens == 0) return 0
+
+        return ((sharedTokens.toDouble() / max(requestTokens.size, candidateTokens.size)) * 100.0).roundToInt()
+    }
+
+    private fun normalizedComparable(value: String): String =
+        value
+            .lowercase()
+            .replace(PARENTHESIS_REGEX, " ")
+            .replace(FEATURING_REGEX, " ")
+            .replace(NON_ALPHANUMERIC_REGEX, " ")
+            .trim()
+            .replace(MULTISPACE_REGEX, " ")
+
+    private fun durationDeltaSeconds(requestDurationSeconds: Int?, candidateDurationSeconds: Int?): Int? {
+        if (requestDurationSeconds == null || candidateDurationSeconds == null) return null
+        return abs(requestDurationSeconds - candidateDurationSeconds)
+    }
+
     private companion object {
         private val TIMESTAMP_REGEX = Regex("""\[(\d+):(\d{2}(?:\.\d+)?)\](.*)""")
+        private val PARENTHESIS_REGEX = Regex("""\([^)]*\)|\[[^\]]*]""")
+        private val FEATURING_REGEX = Regex("""\b(feat|ft|featuring)\.?\b.*""")
+        private val NON_ALPHANUMERIC_REGEX = Regex("""[^a-z0-9]+""")
+        private val MULTISPACE_REGEX = Regex("""\s+""")
+        private const val MIN_TITLE_MATCH_SCORE = 55
+        private const val MIN_ARTIST_MATCH_SCORE = 40
+        private const val NETWORK_TIMEOUT_SECONDS = 15L
         private const val USER_AGENT = "Rokid-Lyrics/0.1"
     }
 }

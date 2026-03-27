@@ -49,6 +49,7 @@ class LyricsGlassesStateStore(
         val listenersSnapshot: List<(LyricsGlassesState) -> Unit>
         synchronized(lock) {
             nextState = when (message) {
+                is PhoneToGlassesMessage.HelloAck -> state
                 is PhoneToGlassesMessage.Status -> state.copy(
                     connectionState = message.status.connectionState,
                     statusLabel = message.status.statusLabel,
