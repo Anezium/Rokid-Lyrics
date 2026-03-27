@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.3] - 2026-03-27
+
+### Fixed
+- Allowed GitHub tag builds to fall back to the debug keystore when no release signing secrets are configured.
+- Kept release builds failing fast when signing secrets are only partially configured.
+
 ## [0.2.2] - 2026-03-27
 
 ### Fixed

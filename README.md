@@ -72,7 +72,7 @@ Release builds read signing values from environment variables or matching Gradle
 - `ROKID_LYRICS_VERSION_NAME` (optional)
 - `ROKID_LYRICS_VERSION_CODE` (optional)
 
-Local `assembleRelease` falls back to the debug keystore if those values are absent so you can validate the release path. Tag builds in GitHub Actions require real signing secrets and publish `release.apk` artifacts only.
+`assembleRelease` falls back to the debug keystore if those values are absent so you can validate the release path locally or in CI. GitHub Actions uses the real release keystore when all signing secrets are configured, otherwise it falls back to the debug keystore and still publishes `release.apk` artifacts. Partial signing configuration fails the build.
 
 ---
 

@@ -5,17 +5,20 @@ fun releaseValue(name: String): String? =
     providers.environmentVariable(name).orNull
         ?: providers.gradleProperty(name).orNull
 
-val ciBuild = providers.environmentVariable("CI").orNull?.equals("true", ignoreCase = true) == true
 val releaseKeystorePath = releaseValue("ANDROID_KEYSTORE_PATH")
 val releaseKeystorePassword = releaseValue("ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = releaseValue("ANDROID_KEY_ALIAS")
 val releaseKeyPassword = releaseValue("ANDROID_KEY_PASSWORD")
-val releaseSigningReady = listOf(
+val releaseSigningValues = listOf(
     releaseKeystorePath,
     releaseKeystorePassword,
     releaseKeyAlias,
     releaseKeyPassword,
-).all { !it.isNullOrBlank() }
+)
+val releaseSigningConfiguredCount = releaseSigningValues.count { !it.isNullOrBlank() }
+val releaseSigningReady = releaseSigningConfiguredCount == releaseSigningValues.size
+val releaseSigningPartiallyConfigured =
+    releaseSigningConfiguredCount in 1 until releaseSigningValues.size
 val releaseVersionNameOverride = releaseValue("ROKID_LYRICS_VERSION_NAME")
     ?.removePrefix("v")
     ?.takeIf { it.isNotBlank() }
@@ -24,9 +27,9 @@ val releaseVersionCodeOverride = releaseValue("ROKID_LYRICS_VERSION_CODE")
     ?.takeIf { it > 0 }
 val releaseTasksRequested = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
 
-if (ciBuild && releaseTasksRequested && !releaseSigningReady) {
+if (releaseTasksRequested && releaseSigningPartiallyConfigured) {
     throw GradleException(
-        "Release signing is not configured. Provide ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, " +
+        "Release signing is partially configured. Provide ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, " +
             "ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD."
     )
 }
@@ -94,8 +97,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Local release builds can fall back to the debug keystore for validation,
-            // but CI tag builds must provide a real release keystore via env/Gradle properties.
+            // Release builds use the provided release keystore when available and
+            // otherwise fall back to the debug keystore. Partial signing config is invalid.
             signingConfig =
                 if (releaseSigningReady) signingConfigs.getByName("release")
                 else signingConfigs.getByName("debug")

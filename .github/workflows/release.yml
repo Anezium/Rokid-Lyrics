@@ -35,7 +35,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Validate Android signing secrets
+      - name: Detect Android signing mode
         shell: pwsh
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -46,15 +46,26 @@ jobs:
             "ANDROID_KEY_ALIAS",
             "ANDROID_KEY_PASSWORD"
           )
-          $missing = $required | Where-Object {
+          $present = $required | Where-Object {
             $value = (Get-Item -Path "Env:$_" -ErrorAction SilentlyContinue).Value
-            [string]::IsNullOrWhiteSpace($value)
-          }
-          if ($missing.Count -gt 0) {
-            throw "Missing release signing secret(s): $($missing -join ', ')"
+            -not [string]::IsNullOrWhiteSpace($value)
           }
 
+          if ($present.Count -eq 0) {
+            "HAS_RELEASE_SIGNING=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Warning "No release signing secrets configured. Falling back to the debug keystore for release builds."
+            exit 0
+          }
+
+          if ($present.Count -ne $required.Count) {
+            $missing = $required | Where-Object { $_ -notin $present }
+            throw "Release signing secrets are partially configured. Missing: $($missing -join ', ')"
+          }
+
+          "HAS_RELEASE_SIGNING=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Write release keystore
+        if: env.HAS_RELEASE_SIGNING == 'true'
         shell: pwsh
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
