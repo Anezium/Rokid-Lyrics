@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.2] - 2026-03-27
+
+### Fixed
+- Fixed the GitHub Actions signing secret validation step so it works under PowerShell on `windows-latest`.
+
 ## [0.2.1] - 2026-03-27
 
 ### Fixed

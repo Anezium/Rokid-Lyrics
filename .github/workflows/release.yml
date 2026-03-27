@@ -46,7 +46,10 @@ jobs:
             "ANDROID_KEY_ALIAS",
             "ANDROID_KEY_PASSWORD"
           )
-          $missing = $required | Where-Object { -not $env:$_ }
+          $missing = $required | Where-Object {
+            $value = (Get-Item -Path "Env:$_" -ErrorAction SilentlyContinue).Value
+            [string]::IsNullOrWhiteSpace($value)
+          }
           if ($missing.Count -gt 0) {
             throw "Missing release signing secret(s): $($missing -join ', ')"
           }
