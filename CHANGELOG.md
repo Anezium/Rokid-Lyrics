@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.4] - 2026-03-29
+
+### Fixed
+- Kept the glasses lyrics screen awake while the lyrics activity is in the foreground so the display no longer times out after about 20 seconds.
+
 ## [0.2.3] - 2026-03-27
 
 ### Fixed

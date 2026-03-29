@@ -4,5 +4,6 @@
     <com.rokid.lyrics.glasses.LyricsHudView
         android:id="@+id/lyricsHudView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:keepScreenOn="true" />
 </merge>
