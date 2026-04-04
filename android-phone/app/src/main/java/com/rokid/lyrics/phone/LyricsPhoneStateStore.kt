@@ -26,6 +26,10 @@ class LyricsPhoneStateStore {
         update { current -> current.copy(deviceStatus = transform(current.deviceStatus)) }
     }
 
+    fun updateProviders(transform: (ProviderSettingsViewState) -> ProviderSettingsViewState) {
+        update { current -> current.copy(providers = transform(current.providers)) }
+    }
+
     fun updateLyrics(snapshot: LyricsSnapshot) {
         val stamped = snapshot.copy(capturedAtEpochMs = System.currentTimeMillis())
         update { current -> current.copy(lyrics = stamped) }

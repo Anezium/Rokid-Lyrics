@@ -33,7 +33,7 @@ data class LyricsSnapshot(
     val artistName: String = "",
     val albumName: String = "",
     val durationSeconds: Int? = null,
-    val provider: String = "LRCLIB",
+    val provider: String = "",
     val sourceSummary: String = "Waiting for active media playback on the phone.",
     val synced: Boolean = false,
     val progressMs: Long = 0L,

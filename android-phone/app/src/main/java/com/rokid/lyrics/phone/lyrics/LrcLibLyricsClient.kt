@@ -15,25 +15,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-data class LyricsLookupRequest(
-    val title: String,
-    val artist: String,
-    val album: String = "",
-    val durationSeconds: Int? = null,
-)
-
-data class LyricsFetchResult(
-    val trackTitle: String,
-    val artistName: String,
-    val albumName: String,
-    val durationSeconds: Int?,
-    val provider: String,
-    val synced: Boolean,
-    val lines: List<LyricsLine>,
-    val plainLyrics: String,
-    val sourceSummary: String,
-)
-
 class LrcLibLyricsClient(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -41,13 +22,25 @@ class LrcLibLyricsClient(
         .writeTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .callTimeout(NETWORK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build(),
-) {
-    suspend fun fetch(request: LyricsLookupRequest): LyricsFetchResult = withContext(Dispatchers.IO) {
+) : LyricsProvider {
+    override val providerName: String = "LRCLIB"
+
+    override suspend fun fetch(request: LyricsLookupRequest): LyricsProviderAttempt = withContext(Dispatchers.IO) {
         val exact = fetchTrack("/api/get-cached", request)
             ?: fetchTrack("/api/get", request)
             ?: fetchSearchFallback(request)
-            ?: error("No lyrics found on LRCLIB for ${request.title} by ${request.artist}.")
-        parseTrack(exact, request)
+            ?: return@withContext LyricsProviderAttempt.NoMatch(
+                provider = providerName,
+                reason = "No lyrics found on LRCLIB for ${request.title} by ${request.artist}.",
+            )
+        val parsed = parseTrack(exact, request)
+        if (!parsed.synced || parsed.lines.isEmpty()) {
+            return@withContext LyricsProviderAttempt.NoMatch(
+                provider = providerName,
+                reason = "No lyrics found on LRCLIB for ${request.title} by ${request.artist}.",
+            )
+        }
+        LyricsProviderAttempt.Success(parsed)
     }
 
     private fun fetchTrack(path: String, request: LyricsLookupRequest): JsonObject? {

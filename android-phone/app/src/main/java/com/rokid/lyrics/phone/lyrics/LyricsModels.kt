@@ -1,0 +1,22 @@
+package com.rokid.lyrics.phone.lyrics
+
+import com.rokid.lyrics.contracts.LyricsLine
+
+data class LyricsLookupRequest(
+    val title: String,
+    val artist: String,
+    val album: String = "",
+    val durationSeconds: Int? = null,
+)
+
+data class LyricsFetchResult(
+    val trackTitle: String,
+    val artistName: String,
+    val albumName: String,
+    val durationSeconds: Int?,
+    val provider: String,
+    val synced: Boolean,
+    val lines: List<LyricsLine>,
+    val plainLyrics: String,
+    val sourceSummary: String,
+)

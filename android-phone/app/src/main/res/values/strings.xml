@@ -4,6 +4,21 @@
     <string name="notification_text">Lyrics Bluetooth runtime is active.</string>
     <string name="button_notification_access">[ NOTIF ACCESS ]</string>
     <string name="button_bluetooth_settings">[ BT SETTINGS ]</string>
+    <string name="button_musixmatch_sign_in">[ SIGN IN MXM ]</string>
+    <string name="button_musixmatch_ready">[ MUSIXMATCH READY ]</string>
+    <string name="label_netease_ready">[ NETEASE READY ]</string>
     <string name="phone_header_title">[ ROKID LYRICS ]</string>
     <string name="bluetooth_connection_state">Bluetooth: %1$s</string>
+    <string name="musixmatch_dialog_title">Musixmatch</string>
+    <string name="musixmatch_dialog_message">Save your Musixmatch email and password so the app can fetch line-synced subtitles on device.</string>
+    <string name="musixmatch_dialog_email_label">Email</string>
+    <string name="musixmatch_dialog_email_hint">name@example.com</string>
+    <string name="musixmatch_dialog_password_label">Password</string>
+    <string name="musixmatch_dialog_password_hint">Your Musixmatch password</string>
+    <string name="musixmatch_dialog_save">Save</string>
+    <string name="musixmatch_dialog_clear">Clear</string>
+    <string name="musixmatch_dialog_email_required">Email is required.</string>
+    <string name="musixmatch_dialog_password_required">Password is required.</string>
+    <string name="musixmatch_saved_toast">Musixmatch credentials saved.</string>
+    <string name="musixmatch_cleared_toast">Musixmatch credentials cleared.</string>
 </resources>

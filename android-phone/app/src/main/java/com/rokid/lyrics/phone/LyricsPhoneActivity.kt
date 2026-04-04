@@ -10,7 +10,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -34,6 +37,9 @@ class LyricsPhoneActivity : AppCompatActivity() {
     private lateinit var tvConnectionStatus: TextView
     private lateinit var tvClientCount: TextView
     private lateinit var tvStatusLabel: TextView
+    private lateinit var btnMusixmatchSettings: Button
+    private lateinit var tvMusixmatchStatus: TextView
+    private lateinit var tvNeteaseStatus: TextView
     private var unsubscribe: (() -> Unit)? = null
     private var btPulseAnimator: ObjectAnimator? = null
 
@@ -56,6 +62,9 @@ class LyricsPhoneActivity : AppCompatActivity() {
         tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         tvClientCount = findViewById(R.id.tvClientCount)
         tvStatusLabel = findViewById(R.id.tvStatusLabel)
+        btnMusixmatchSettings = findViewById(R.id.btnMusixmatchSettings)
+        tvMusixmatchStatus = findViewById(R.id.tvMusixmatchStatus)
+        tvNeteaseStatus = findViewById(R.id.tvNeteaseStatus)
 
         viewProgress.pivotX = 0f
 
@@ -65,6 +74,7 @@ class LyricsPhoneActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnBluetoothSettings).setOnClickListener {
             startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         }
+        btnMusixmatchSettings.setOnClickListener { showMusixmatchDialog() }
 
         btPulseAnimator = ObjectAnimator.ofFloat(viewBtDot, "alpha", 1f, 0.15f).apply {
             duration = 900
@@ -118,7 +128,6 @@ class LyricsPhoneActivity : AppCompatActivity() {
         val clientCount = state.deviceStatus.bluetoothClientCount
         val isConnected = clientCount > 0
 
-        // BT dot — pulse only when connected
         if (isConnected) {
             if (btPulseAnimator?.isRunning == false) btPulseAnimator?.start()
         } else {
@@ -131,7 +140,6 @@ class LyricsPhoneActivity : AppCompatActivity() {
             "NO DEVICE"
         }
 
-        // Playing badge
         val isPlaying = state.lyrics.sessionState == LyricsSessionState.PLAYING
         tvPlayingBadge.text = when (state.lyrics.sessionState) {
             LyricsSessionState.PLAYING -> "> PLAYING"
@@ -144,30 +152,31 @@ class LyricsPhoneActivity : AppCompatActivity() {
             ContextCompat.getColor(
                 this,
                 if (isPlaying) R.color.phosphor_primary else R.color.phosphor_dim,
-            )
+            ),
         )
 
-        // Track info
         tvTrackTitle.text = when {
             state.lyrics.trackTitle.isNotBlank() -> state.lyrics.trackTitle
-            else -> "Waiting for music…"
+            else -> "Waiting for music..."
         }
         tvArtistName.text = state.lyrics.artistName.ifBlank { "Play something on your phone" }
 
-        // Source pill
         tvSourcePill.text = when {
             state.lyrics.errorMessage != null -> "ERROR"
-            state.lyrics.sourceSummary.isNotBlank() -> shortenSource(state.lyrics.sourceSummary)
+            state.lyrics.sourceSummary.isNotBlank() -> sourcePillText(
+                state.lyrics.provider,
+                state.lyrics.sourceSummary,
+                state.lyrics.synced,
+            )
             else -> "NO SOURCE"
         }
         tvSourcePill.setTextColor(
             ContextCompat.getColor(
                 this,
                 if (state.lyrics.errorMessage != null) R.color.phosphor_error else R.color.phosphor_dim,
-            )
+            ),
         )
 
-        // Progress bar — approximate from line index / total lines
         val lineCount = state.lyrics.lines.size
         viewProgress.scaleX = if (lineCount > 0) {
             (state.lyrics.currentLineIndex.toFloat() / lineCount.toFloat()).coerceIn(0f, 1f)
@@ -175,30 +184,63 @@ class LyricsPhoneActivity : AppCompatActivity() {
             0f
         }
 
-        // Lyrics (4-line cascade)
         val idx = state.lyrics.currentLineIndex
         tvPastLine.text = lineText(state, idx - 1)
-        tvCurrentLine.text = lineText(state, idx, "No active line yet.")
+        tvCurrentLine.text = currentLineText(state)
         tvNextLine1.text = lineText(state, idx + 1)
         tvNextLine2.text = lineText(state, idx + 2)
 
-        // Status bar
         val notifOk = state.deviceStatus.notificationAccessEnabled
-        tvNotifStatus.text = if (notifOk) "NOTIF ✓" else "NOTIF ✗"
+        tvNotifStatus.text = if (notifOk) "NOTIF OK" else "NOTIF OFF"
         tvNotifStatus.setTextColor(
             ContextCompat.getColor(
                 this,
                 if (notifOk) R.color.phosphor_primary else R.color.phosphor_error,
-            )
+            ),
         )
+
+        btnMusixmatchSettings.text = if (state.providers.musixmatchConfigured) {
+            getString(R.string.button_musixmatch_ready)
+        } else {
+            getString(R.string.button_musixmatch_sign_in)
+        }
+        tvMusixmatchStatus.text = state.providers.musixmatchStatusLabel
+        tvNeteaseStatus.text = state.providers.neteaseStatusLabel
         tvConnectionStatus.text = "BT: ${state.deviceStatus.connectionState.name}"
         tvClientCount.text = "$clientCount CLI"
         tvStatusLabel.text = state.deviceStatus.statusLabel
     }
 
-    private fun shortenSource(summary: String): String {
-        val lines = Regex("with (\\d+) timed").find(summary)?.groupValues?.get(1)
-        return if (lines != null) "LRCLIB · $lines♪" else summary.take(18)
+    private fun sourcePillText(provider: String, summary: String, synced: Boolean): String {
+        if (!synced && summary.startsWith("No synced lyrics found", ignoreCase = true)) {
+            return "NO SYNC"
+        }
+        if (!synced && summary.startsWith("Track resolved without timed lyrics", ignoreCase = true)) {
+            return "NO SYNC"
+        }
+        if (provider.isBlank()) {
+            return when {
+                summary.startsWith("Resolving lyrics", ignoreCase = true) -> "LOOKUP"
+                summary.startsWith("Querying lyrics providers", ignoreCase = true) -> "LOOKUP"
+                summary.startsWith("Tracking Spotify", ignoreCase = true) -> "SPOTIFY"
+                summary.startsWith("Tracking ", ignoreCase = true) -> "MEDIA"
+                else -> "NO SOURCE"
+            }
+        }
+        return provider.ifBlank { "SOURCE" }.take(14)
+    }
+
+    private fun currentLineText(state: LyricsPhoneViewState): String {
+        if (state.lyrics.sessionState == LyricsSessionState.LOADING) {
+            return "Searching..."
+        }
+        if (showsNoLyricsFound(state)) {
+            return "No lyrics found"
+        }
+        if (state.lyrics.synced && state.lyrics.lines.isNotEmpty() && state.lyrics.currentLineIndex < 0) {
+            return "..."
+        }
+        return lineText(state, state.lyrics.currentLineIndex)
     }
 
     private fun lineText(state: LyricsPhoneViewState, index: Int, fallback: String = ""): String {
@@ -209,6 +251,15 @@ class LyricsPhoneActivity : AppCompatActivity() {
                 state.lyrics.plainLyrics.lineSequence().firstOrNull().orEmpty().ifBlank { fallback }
             else -> fallback
         }
+    }
+
+    private fun showsNoLyricsFound(state: LyricsPhoneViewState): Boolean {
+        val lyrics = state.lyrics
+        if (lyrics.errorMessage != null) return false
+        if (lyrics.trackTitle.isBlank()) return false
+        if (lyrics.synced || lyrics.lines.isNotEmpty() || lyrics.plainLyrics.isNotBlank()) return false
+        return lyrics.sourceSummary.startsWith("No synced lyrics found", ignoreCase = true) ||
+            lyrics.sourceSummary.startsWith("Track resolved without timed lyrics", ignoreCase = true)
     }
 
     private fun requestRuntimePermissionsIfNeeded() {
@@ -234,6 +285,57 @@ class LyricsPhoneActivity : AppCompatActivity() {
         val scanGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
         return bluetoothGranted && scanGranted
+    }
+
+    private fun showMusixmatchDialog() {
+        val existing = LyricsPhoneGraph.musixmatchCredentials()
+        val dialogView = layoutInflater.inflate(R.layout.dialog_musixmatch_settings, null)
+        val emailField = dialogView.findViewById<EditText>(R.id.editMusixmatchEmail)
+        val passwordField = dialogView.findViewById<EditText>(R.id.editMusixmatchPassword)
+
+        emailField.setText(existing?.email.orEmpty())
+        passwordField.setText(existing?.password.orEmpty())
+
+        val dialogBuilder = AlertDialog.Builder(this, R.style.Theme_PhosphorDialog)
+            .setTitle(R.string.musixmatch_dialog_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.musixmatch_dialog_save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+
+        if (existing != null) {
+            dialogBuilder.setNeutralButton(R.string.musixmatch_dialog_clear) { _, _ ->
+                LyricsPhoneGraph.clearMusixmatchCredentials()
+                Toast.makeText(
+                    this,
+                    R.string.musixmatch_cleared_toast,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+
+        val dialog = dialogBuilder.create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val email = emailField.text?.toString()?.trim().orEmpty()
+                val password = passwordField.text?.toString().orEmpty()
+                if (email.isBlank()) {
+                    emailField.error = getString(R.string.musixmatch_dialog_email_required)
+                    return@setOnClickListener
+                }
+                if (password.isBlank()) {
+                    passwordField.error = getString(R.string.musixmatch_dialog_password_required)
+                    return@setOnClickListener
+                }
+                LyricsPhoneGraph.saveMusixmatchCredentials(email, password)
+                Toast.makeText(
+                    this,
+                    R.string.musixmatch_saved_toast,
+                    Toast.LENGTH_SHORT,
+                ).show()
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
     private companion object {

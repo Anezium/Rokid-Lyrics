@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="8dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/musixmatch_dialog_message"
+        android:textColor="@color/phosphor_dim"
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:lineSpacingExtra="3dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:text="@string/musixmatch_dialog_email_label"
+        android:textColor="@color/phosphor_mid"
+        android:textSize="10sp"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.15"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/editMusixmatchEmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:autofillHints="emailAddress"
+        android:hint="@string/musixmatch_dialog_email_hint"
+        android:textColor="@color/phosphor_text_bright"
+        android:textColorHint="@color/phosphor_text_ghost"
+        android:textSize="14sp"
+        android:fontFamily="monospace"
+        android:inputType="textEmailAddress"
+        android:backgroundTint="@color/phosphor_dim" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/musixmatch_dialog_password_label"
+        android:textColor="@color/phosphor_mid"
+        android:textSize="10sp"
+        android:fontFamily="monospace"
+        android:letterSpacing="0.15"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/editMusixmatchPassword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:autofillHints="password"
+        android:hint="@string/musixmatch_dialog_password_hint"
+        android:textColor="@color/phosphor_text_bright"
+        android:textColorHint="@color/phosphor_text_ghost"
+        android:textSize="14sp"
+        android:fontFamily="monospace"
+        android:inputType="textPassword"
+        android:backgroundTint="@color/phosphor_dim" />
+
+</LinearLayout>

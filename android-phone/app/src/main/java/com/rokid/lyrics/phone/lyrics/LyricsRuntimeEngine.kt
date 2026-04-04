@@ -1,5 +1,6 @@
 package com.rokid.lyrics.phone.lyrics
 
+import android.util.Log
 import android.os.SystemClock
 import com.rokid.lyrics.contracts.LyricsLine
 import com.rokid.lyrics.contracts.LyricsSessionState
@@ -17,12 +18,15 @@ import kotlinx.coroutines.launch
 
 class LyricsRuntimeEngine(
     private val stateStore: LyricsPhoneStateStore,
-    private val lyricsClient: LrcLibLyricsClient = LrcLibLyricsClient(),
+    private val lyricsProvider: CompositeLyricsProvider,
+    private val onLookupStarted: (() -> Unit)? = null,
+    private val onAttemptSummaries: ((List<ProviderAttemptSummary>) -> Unit)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var lookupJob: Job? = null
     private var activeMediaSnapshot: MediaPlaybackSnapshot? = null
     private var activeMediaLookupKey: String? = null
+    @Volatile private var lastResolvedLookupKey: String? = null
     @Volatile private var lookupInFlightKey: String? = null
     private val lookupGeneration = AtomicLong(0L)
     @Volatile private var lastLookupErrorKey: String? = null
@@ -52,7 +56,7 @@ class LyricsRuntimeEngine(
 
         val current = stateStore.current().lyrics
         if (current.trackTitle.isBlank() || current.artistName.isBlank()) {
-            stateStore.updateStatus { it.copy(statusLabel = "Nothing to refresh yet. Start Spotify on the phone.") }
+            stateStore.updateStatus { it.copy(statusLabel = "Nothing to refresh yet. Start music on the phone.") }
             return
         }
         lookup(
@@ -84,7 +88,7 @@ class LyricsRuntimeEngine(
                 stateStore.updateLyrics(
                     current.copy(
                         sessionState = LyricsSessionState.IDLE,
-                        sourceSummary = "Start Spotify or another media app on the phone.",
+                        sourceSummary = "Start a media app on the phone.",
                         errorMessage = null,
                     )
                 )
@@ -105,7 +109,13 @@ class LyricsRuntimeEngine(
         val lookupKey = mediaLookupKey(snapshot)
         val matchesLoaded = normalized(current.trackTitle) == normalized(snapshot.title) &&
             normalized(current.artistName) == normalized(snapshot.artist)
-        if (shouldLookupForCurrentTrack(current, lookupKey, matchesLoaded)) {
+        val lookupDecision = shouldLookupForCurrentTrack(current, lookupKey, matchesLoaded)
+        if (lookupDecision.shouldLookup || lookupDecision.reason != "skip_already_resolved") {
+            debugLog {
+                "media snapshot key=$lookupKey activeKey=$activeMediaLookupKey resolvedKey=$lastResolvedLookupKey inFlight=$lookupInFlightKey matchesLoaded=$matchesLoaded state=${current.sessionState} lines=${current.lines.size} decision=${lookupDecision.reason}"
+            }
+        }
+        if (lookupDecision.shouldLookup) {
             activeMediaLookupKey = lookupKey
             lookup(
                 request = LyricsLookupRequest(
@@ -120,6 +130,7 @@ class LyricsRuntimeEngine(
             return
         }
 
+        activeMediaLookupKey = lookupKey
         stateStore.updateStatus {
             it.copy(statusLabel = "Tracking ${sourceLabel(snapshot.packageName)} - ${snapshot.title} / ${snapshot.artist}")
         }
@@ -158,29 +169,36 @@ class LyricsRuntimeEngine(
         val generation = lookupGeneration.incrementAndGet()
         lookupInFlightKey = requestKey
         lookupJob?.cancel()
+        val currentLyrics = stateStore.current().lyrics
+        val preserveVisibleLyrics = shouldPreserveVisibleLyrics(currentLyrics, normalizedRequest)
+        val preservedSnapshot = currentLyrics.takeIf { preserveVisibleLyrics }
+        debugLog {
+            "lookup start key=$requestKey fromMedia=$fromMedia title='${normalizedRequest.title}' artist='${normalizedRequest.artist}' album='${normalizedRequest.album}' duration=${normalizedRequest.durationSeconds}"
+        }
 
-        stateStore.updateLyrics(
-            stateStore.current().lyrics.copy(
-                sessionState = LyricsSessionState.LOADING,
-                trackTitle = title,
-                artistName = artist,
-                albumName = normalizedRequest.album,
-                durationSeconds = request.durationSeconds,
-                errorMessage = null,
-                sourceSummary = if (fromMedia) {
-                    "Resolving lyrics for ${sourceLabel(activeMediaSnapshot?.packageName)}..."
-                } else {
-                    "Querying LRCLIB..."
-                },
-            )
+        onLookupStarted?.invoke()
+        var loadingSnapshot = buildLookupLoadingSnapshot(
+            current = currentLyrics,
+            request = normalizedRequest,
+            fromMedia = fromMedia,
+            mediaSourceLabel = sourceLabel(activeMediaSnapshot?.packageName),
+            preserveVisibleLyrics = preserveVisibleLyrics,
         )
+        val latestMediaForLoading = activeMediaSnapshot
+        if (preserveVisibleLyrics && mediaKey != null && latestMediaForLoading != null && mediaLookupKey(latestMediaForLoading) == mediaKey) {
+            loadingSnapshot = applyMediaSnapshot(loadingSnapshot, latestMediaForLoading)
+        }
+        stateStore.updateLyrics(loadingSnapshot)
 
         lookupJob = scope.launch {
             try {
-                val result = lyricsClient.fetch(normalizedRequest)
+                val compositeResult = lyricsProvider.fetch(normalizedRequest)
                 if (!shouldCommitLookup(generation, requestKey, mediaKey)) {
                     return@launch
                 }
+                lastResolvedLookupKey = requestKey
+                onAttemptSummaries?.invoke(compositeResult.attemptSummaries)
+                val result = compositeResult.result
                 var next = LyricsSnapshot(
                     sessionState = LyricsSessionState.READY,
                     trackTitle = result.trackTitle,
@@ -202,6 +220,9 @@ class LyricsRuntimeEngine(
                 }
                 clearLookupError(requestKey)
                 stateStore.updateLyrics(next)
+                debugLog {
+                    "lookup success key=$requestKey provider=${next.provider} synced=${next.synced} lines=${next.lines.size} progress=${next.progressMs} currentLineIndex=${next.currentLineIndex} summary='${next.sourceSummary}'"
+                }
                 stateStore.updateStatus {
                     it.copy(
                         statusLabel = if (next.synced) {
@@ -219,21 +240,27 @@ class LyricsRuntimeEngine(
                     return@launch
                 }
                 markLookupError(requestKey)
-                stateStore.updateLyrics(
-                    stateStore.current().lyrics.copy(
-                        sessionState = LyricsSessionState.ERROR,
-                        errorMessage = error.message ?: "Lyrics lookup failed.",
-                        sourceSummary = "LRCLIB did not return a usable lyrics payload.",
-                        lines = emptyList(),
-                        plainLyrics = "",
-                        progressMs = 0L,
-                        currentLineIndex = -1,
-                        synced = false,
-                    )
+                errorLog(
+                    message = "lookup failure key=$requestKey title='$title' artist='$artist' message='${error.message ?: "Lyrics lookup failed."}'",
+                    error = error,
                 )
+                var failureSnapshot = buildLookupFailureSnapshot(
+                    current = stateStore.current().lyrics,
+                    errorMessage = error.message ?: "Lyrics lookup failed.",
+                    preservedSnapshot = preservedSnapshot,
+                )
+                val latestMediaForFailure = activeMediaSnapshot
+                if (preservedSnapshot != null && mediaKey != null && latestMediaForFailure != null && mediaLookupKey(latestMediaForFailure) == mediaKey) {
+                    failureSnapshot = applyMediaSnapshot(failureSnapshot, latestMediaForFailure)
+                }
+                stateStore.updateLyrics(failureSnapshot)
                 stateStore.updateStatus {
                     it.copy(
-                        statusLabel = "Lyrics lookup failed for $title / $artist.",
+                        statusLabel = if (preservedSnapshot != null) {
+                            "Lyrics refresh failed for $title / $artist. Keeping current lyrics."
+                        } else {
+                            "Lyrics lookup failed for $title / $artist."
+                        },
                         lastError = error.message,
                     )
                 }
@@ -249,15 +276,52 @@ class LyricsRuntimeEngine(
         current: LyricsSnapshot,
         lookupKey: String,
         matchesLoaded: Boolean,
-    ): Boolean {
-        if (lookupKey != activeMediaLookupKey) return true
-        if (lookupInFlightKey == lookupKey) return false
-        if (!matchesLoaded) return true
-        if (current.sessionState == LyricsSessionState.ERROR) {
-            return canRetryFailedLookup(lookupKey)
+    ): LookupDecision {
+        if (lookupInFlightKey == lookupKey) {
+            return LookupDecision(
+                shouldLookup = false,
+                reason = "skip_in_flight",
+            )
         }
-        if (current.lines.isNotEmpty() || current.plainLyrics.isNotBlank()) return false
-        return current.sessionState == LyricsSessionState.IDLE
+        if (current.sessionState == LyricsSessionState.ERROR) {
+            val canRetry = canRetryFailedLookup(lookupKey)
+            return LookupDecision(
+                shouldLookup = canRetry,
+                reason = if (canRetry) "retry_after_error" else "skip_recent_error",
+            )
+        }
+        if (lookupKey == lastResolvedLookupKey) {
+            return LookupDecision(
+                shouldLookup = false,
+                reason = "skip_already_resolved",
+            )
+        }
+        if (lookupKey != activeMediaLookupKey) {
+            return LookupDecision(
+                shouldLookup = true,
+                reason = "new_media_key",
+            )
+        }
+        if (!matchesLoaded) {
+            return LookupDecision(
+                shouldLookup = true,
+                reason = "loaded_track_mismatch",
+            )
+        }
+        if (current.lines.isNotEmpty() || current.plainLyrics.isNotBlank()) {
+            return LookupDecision(
+                shouldLookup = false,
+                reason = "skip_loaded_lyrics_present",
+            )
+        }
+        return LookupDecision(
+            shouldLookup = current.sessionState == LyricsSessionState.IDLE,
+            reason = if (current.sessionState == LyricsSessionState.IDLE) {
+                "idle_without_lyrics"
+            } else {
+                "skip_waiting_for_existing_result"
+            },
+        )
     }
 
     private fun cancelLookup() {
@@ -311,11 +375,21 @@ class LyricsRuntimeEngine(
         snapshot: MediaPlaybackSnapshot,
     ): LyricsSnapshot {
         val progressMs = snapshot.positionMs.coerceAtLeast(0L)
+        val trackingSummary = "Tracking ${sourceLabel(snapshot.packageName)} via Android media session."
+        val keepsLoading =
+            base.sessionState == LyricsSessionState.LOADING &&
+                base.lines.isEmpty() &&
+                base.plainLyrics.isBlank() &&
+                base.errorMessage == null
         return base.copy(
-            sessionState = if (snapshot.isPlaying) LyricsSessionState.PLAYING else LyricsSessionState.READY,
+            sessionState = when {
+                keepsLoading -> LyricsSessionState.LOADING
+                snapshot.isPlaying -> LyricsSessionState.PLAYING
+                else -> LyricsSessionState.READY
+            },
             progressMs = progressMs,
             currentLineIndex = indexForProgress(base.lines, progressMs),
-            sourceSummary = "Tracking ${sourceLabel(snapshot.packageName)} via Android media session.",
+            sourceSummary = base.sourceSummary.ifBlank { trackingSummary },
             errorMessage = null,
         )
     }
@@ -351,7 +425,98 @@ class LyricsRuntimeEngine(
         else -> packageName.substringAfterLast('.').replaceFirstChar { it.uppercase() }
     }
 
+    private fun debugLog(message: () -> String) {
+        runCatching { Log.d(TAG, message()) }
+    }
+
+    private fun errorLog(message: String, error: Throwable) {
+        runCatching { Log.e(TAG, message, error) }
+    }
+
+    private data class LookupDecision(
+        val shouldLookup: Boolean,
+        val reason: String,
+    )
+
     private companion object {
+        private const val TAG = "RokidLyricsRuntime"
         private const val LOOKUP_ERROR_RETRY_MS = 15_000L
     }
 }
+
+internal fun shouldPreserveVisibleLyrics(
+    current: LyricsSnapshot,
+    request: LyricsLookupRequest,
+): Boolean =
+    hasVisibleLyrics(current) &&
+        current.trackTitle.normalizedLookupValue() == request.title.normalizedLookupValue() &&
+        current.artistName.normalizedLookupValue() == request.artist.normalizedLookupValue()
+
+internal fun buildLookupLoadingSnapshot(
+    current: LyricsSnapshot,
+    request: LyricsLookupRequest,
+    fromMedia: Boolean,
+    mediaSourceLabel: String,
+    preserveVisibleLyrics: Boolean,
+): LyricsSnapshot {
+    val loadingSummary = if (fromMedia) {
+        "Resolving lyrics for $mediaSourceLabel..."
+    } else {
+        "Querying lyrics providers..."
+    }
+    if (preserveVisibleLyrics) {
+        return current.copy(
+            sessionState = LyricsSessionState.READY,
+            trackTitle = request.title,
+            artistName = request.artist,
+            albumName = request.album,
+            durationSeconds = request.durationSeconds,
+            errorMessage = null,
+            sourceSummary = current.sourceSummary.ifBlank { loadingSummary },
+        )
+    }
+    return current.copy(
+        sessionState = LyricsSessionState.LOADING,
+        trackTitle = request.title,
+        artistName = request.artist,
+        albumName = request.album,
+        durationSeconds = request.durationSeconds,
+        provider = "",
+        errorMessage = null,
+        synced = false,
+        lines = emptyList(),
+        plainLyrics = "",
+        currentLineIndex = -1,
+        progressMs = 0L,
+        sourceSummary = loadingSummary,
+    )
+}
+
+internal fun buildLookupFailureSnapshot(
+    current: LyricsSnapshot,
+    errorMessage: String,
+    preservedSnapshot: LyricsSnapshot?,
+): LyricsSnapshot {
+    if (preservedSnapshot != null && hasVisibleLyrics(preservedSnapshot)) {
+        return preservedSnapshot.copy(
+            sessionState = LyricsSessionState.READY,
+            errorMessage = null,
+        )
+    }
+    return current.copy(
+        sessionState = LyricsSessionState.ERROR,
+        errorMessage = errorMessage,
+        sourceSummary = "Lyrics providers did not return a usable lyrics payload.",
+        lines = emptyList(),
+        plainLyrics = "",
+        progressMs = 0L,
+        currentLineIndex = -1,
+        synced = false,
+    )
+}
+
+internal fun hasVisibleLyrics(snapshot: LyricsSnapshot): Boolean =
+    snapshot.lines.isNotEmpty() || snapshot.plainLyrics.isNotBlank()
+
+internal fun String.normalizedLookupValue(): String =
+    trim().lowercase()

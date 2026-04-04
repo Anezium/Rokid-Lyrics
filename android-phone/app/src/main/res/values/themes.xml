@@ -4,4 +4,21 @@
         <item name="android:statusBarColor">@color/phosphor_bg</item>
         <item name="android:navigationBarColor">@color/phosphor_bg</item>
     </style>
+
+    <style name="Theme.PhosphorDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@color/phosphor_card_bg</item>
+        <item name="android:colorBackground">@color/phosphor_card_bg</item>
+        <item name="android:textColorPrimary">@color/phosphor_text_bright</item>
+        <item name="android:textColorSecondary">@color/phosphor_dim</item>
+        <item name="colorAccent">@color/phosphor_primary</item>
+        <item name="android:textColorHint">@color/phosphor_text_ghost</item>
+        <item name="android:buttonBarButtonStyle">@style/PhosphorDialogButton</item>
+    </style>
+
+    <style name="PhosphorDialogButton" parent="Widget.AppCompat.Button.ButtonBar.AlertDialog">
+        <item name="android:textColor">@color/phosphor_primary</item>
+        <item name="android:fontFamily">monospace</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textSize">11sp</item>
+    </style>
 </resources>

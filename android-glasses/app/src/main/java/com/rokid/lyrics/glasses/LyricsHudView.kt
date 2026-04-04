@@ -174,9 +174,17 @@ class LyricsHudView @JvmOverloads constructor(
     private fun buildMeta(state: LyricsGlassesState): String {
         if (state.trackTitle.isBlank() && state.artistName.isBlank()) return ""
         return buildString {
-            append(state.provider.ifBlank { "LRCLIB" })
-            if (state.synced) append("  synced")
-            if (state.albumName.isNotBlank()) append("  /  ${state.albumName}")
+            state.provider.takeIf { it.isNotBlank() }?.let { provider ->
+                append(provider)
+            }
+            if (state.synced) {
+                if (isNotEmpty()) append("  ")
+                append("synced")
+            }
+            if (state.albumName.isNotBlank()) {
+                if (isNotEmpty()) append("  /  ")
+                append(state.albumName)
+            }
         }
     }
 
@@ -217,7 +225,7 @@ class LyricsHudView @JvmOverloads constructor(
             val resolvedIndex = resolvedCurrentLineIndex(state)
             val currentLine = state.lines.getOrNull(resolvedIndex)?.text
                 ?.takeIf { it.isNotBlank() }
-                ?: "Waiting for the first line..."
+                ?: "..."
             val nextLine = state.lines.getOrNull(resolvedIndex + 1)?.text
                 ?.takeIf { it.isNotBlank() }
                 .orEmpty()
@@ -249,7 +257,7 @@ class LyricsHudView @JvmOverloads constructor(
         }
 
         return BodyCopy(
-            currentLine = "No synced lyrics for this track.",
+            currentLine = "No lyrics found.",
             nextLine = "Try another song or keep playback on the phone.",
             hint = CONTROL_HINT,
         )

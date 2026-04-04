@@ -6,7 +6,6 @@
     android:orientation="vertical"
     android:background="@color/phosphor_bg">
 
-    <!-- ── HEADER ── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -48,7 +47,6 @@
             android:letterSpacing="0.12" />
     </LinearLayout>
 
-    <!-- ── TRACK CARD ── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -70,7 +68,7 @@
                 android:id="@+id/tvPlayingBadge"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="▶ PLAYING"
+                android:text="> PLAYING"
                 android:textColor="@color/phosphor_primary"
                 android:textSize="9sp"
                 android:fontFamily="monospace"
@@ -123,7 +121,6 @@
             android:singleLine="true"
             android:ellipsize="end" />
 
-        <!-- Progress bar -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="2dp"
@@ -140,7 +137,6 @@
         </FrameLayout>
     </LinearLayout>
 
-    <!-- ── LYRICS DIVIDER ── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -159,7 +155,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="◈ LYRICS ◈"
+            android:text="LYRICS"
             android:textColor="@color/phosphor_divider"
             android:textSize="9sp"
             android:fontFamily="monospace"
@@ -174,7 +170,6 @@
             android:background="@color/phosphor_divider" />
     </LinearLayout>
 
-    <!-- ── LYRICS STAGE (expands to fill) ── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -183,7 +178,6 @@
         android:gravity="center_vertical"
         android:layout_marginTop="6dp">
 
-        <!-- Past line -->
         <TextView
             android:id="@+id/tvPastLine"
             android:layout_width="match_parent"
@@ -196,7 +190,6 @@
             android:textSize="15sp"
             android:alpha="0.7" />
 
-        <!-- Current line with left border -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -224,7 +217,6 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Next line 1 -->
         <TextView
             android:id="@+id/tvNextLine1"
             android:layout_width="match_parent"
@@ -237,7 +229,6 @@
             android:textSize="17sp"
             android:alpha="0.72" />
 
-        <!-- Next line 2 -->
         <TextView
             android:id="@+id/tvNextLine2"
             android:layout_width="match_parent"
@@ -251,7 +242,6 @@
             android:alpha="0.32" />
     </LinearLayout>
 
-    <!-- ── SEPARATOR ── -->
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
@@ -259,7 +249,6 @@
         android:layout_marginEnd="22dp"
         android:background="@color/phosphor_divider" />
 
-    <!-- ── ACTION BUTTONS ── -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -304,7 +293,68 @@
             android:textAllCaps="false" />
     </LinearLayout>
 
-    <!-- ── STATUS BAR ── -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:paddingTop="10dp">
+
+        <Button
+            android:id="@+id/btnMusixmatchSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/button_musixmatch_sign_in"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.14"
+            android:background="@drawable/btn_outline_green"
+            android:paddingTop="11dp"
+            android:paddingBottom="11dp"
+            android:gravity="center"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false" />
+
+        <TextView
+            android:id="@+id/tvMusixmatchStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/phosphor_text_ghost"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="2dp"
+            android:maxLines="2" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="@string/label_netease_ready"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.14"
+            android:background="@drawable/bg_source_pill"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/tvNeteaseStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/phosphor_text_ghost"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="2dp"
+            android:maxLines="2" />
+    </LinearLayout>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -326,7 +376,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=" │ "
+            android:text=" | "
             android:textColor="@color/phosphor_separator"
             android:textSize="9sp"
             android:fontFamily="monospace" />
@@ -342,7 +392,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=" │ "
+            android:text=" | "
             android:textColor="@color/phosphor_separator"
             android:textSize="9sp"
             android:fontFamily="monospace" />
@@ -364,7 +414,7 @@
             android:id="@+id/tvStatusLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/phosphor_divider"
+            android:textColor="@color/phosphor_dim"
             android:textSize="9sp"
             android:fontFamily="monospace"
             android:singleLine="true"

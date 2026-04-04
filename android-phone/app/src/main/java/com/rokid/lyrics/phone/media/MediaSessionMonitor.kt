@@ -66,7 +66,7 @@ class MediaSessionMonitor(
         }
         started = true
         if (!isNotificationAccessEnabled()) {
-            onStatusChanged("Enable notification access so Lyrics can read Spotify/media sessions.")
+            onStatusChanged("Enable notification access so Lyrics can read media sessions.")
             onPlaybackSnapshot(null)
             return
         }
@@ -90,7 +90,7 @@ class MediaSessionMonitor(
         if (!started) return
         if (!isNotificationAccessEnabled()) {
             attachToController(null)
-            onStatusChanged("Notification access is disabled. Enable it to follow Spotify.")
+            onStatusChanged("Notification access is disabled. Enable it to follow media playback.")
             onPlaybackSnapshot(null)
             return
         }
@@ -108,7 +108,7 @@ class MediaSessionMonitor(
         if (!started) return
         val controller = currentController ?: resolveActiveController()
         if (controller == null) {
-            onStatusChanged("No active media session to control. Start Spotify on the phone.")
+            onStatusChanged("No active media session to control. Start a media app on the phone.")
             return
         }
 
@@ -148,7 +148,7 @@ class MediaSessionMonitor(
         mainHandler.removeCallbacks(progressTicker)
         val snapshot = buildSnapshot(currentController)
         if (snapshot == null) {
-            onStatusChanged("No active media session found. Start Spotify on the phone.")
+            onStatusChanged("No active media session found. Start a media app on the phone.")
             onPlaybackSnapshot(null)
             return
         }
@@ -232,16 +232,24 @@ class MediaSessionMonitor(
 
     private fun selectController(controllers: List<MediaController>): MediaController? =
         controllers
-            .filter { controller ->
-                controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).isNullOrBlank().not()
-            }
+            .filter(::hasUsableMetadata)
             .sortedWith(
-                compareByDescending<MediaController> { it.packageName == SPOTIFY_PACKAGE }
-                    .thenByDescending { controller ->
-                        controller.playbackState?.state == PlaybackState.STATE_PLAYING
-                    }
+                compareByDescending<MediaController> { controllerPlaybackPriority(it.playbackState?.state) }
+                    .thenByDescending { it.playbackState?.lastPositionUpdateTime ?: Long.MIN_VALUE }
             )
             .firstOrNull()
+
+    private fun hasUsableMetadata(controller: MediaController): Boolean {
+        val metadata = controller.metadata ?: return false
+        val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty().trim()
+        val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
+            .orEmpty()
+            .trim()
+            .ifBlank {
+                metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty().trim()
+            }
+        return title.isNotBlank() && artist.isNotBlank()
+    }
 
     private fun shouldScheduleProgress(state: PlaybackState?): Boolean =
         state?.state == PlaybackState.STATE_PLAYING && state.lastPositionUpdateTime > 0L
@@ -258,4 +266,15 @@ class MediaSessionMonitor(
     private companion object {
         private const val SPOTIFY_PACKAGE = "com.spotify.music"
     }
+}
+
+internal fun controllerPlaybackPriority(state: Int?): Int = when (state) {
+    PlaybackState.STATE_PLAYING,
+    PlaybackState.STATE_FAST_FORWARDING,
+    PlaybackState.STATE_REWINDING,
+    PlaybackState.STATE_BUFFERING,
+    -> 3
+    PlaybackState.STATE_PAUSED -> 2
+    PlaybackState.STATE_CONNECTING -> 1
+    else -> 0
 }
