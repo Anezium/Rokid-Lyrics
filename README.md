@@ -13,36 +13,58 @@
 ## Screenshots
 
 <p align="center">
-  <img src="Screenshot_App.jpg" alt="Phone app — Phosphor Glass UI" width="300" />
+  <img src="Screenshot_App.jpg" alt="Phone app - Phosphor Glass UI" width="300" />
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="Screenshot_Glasses.jpg" alt="Rokid Glasses — live lyrics display" width="300" />
+  <img src="Screenshot_Glasses.jpg" alt="Rokid Glasses - live lyrics display" width="300" />
 </p>
 <p align="center">
-  <em>Phone companion app &nbsp;·&nbsp; Rokid Glasses live display</em>
+  <em>Phone companion app · Rokid Glasses live display</em>
 </p>
+
+---
+
+## Latest update
+
+The biggest recent chantier was turning the phone app into a real multi-provider lyrics pipeline instead of a single-source prototype.
+
+- Added a provider chain on the phone: `Musixmatch -> Netease -> LRCLIB`
+- Added optional Musixmatch sign-in and provider-aware status in the phone UI
+- Improved lookup reliability so one track change triggers one real lookup instead of repeated retries
+- Kept already loaded lyrics on screen when a refresh for the same track fails
+- Removed the hidden Spotify preference in media session selection so the app behaves better with other players
+- Cleaned up fallback messaging so a failed provider does not pollute the final status when another provider succeeds
 
 ---
 
 ## How it works
 
-The phone app monitors whatever is playing on Android (Spotify, Apple Music, YouTube, etc.), fetches time-synced lyrics from [LRCLIB](https://lrclib.net), and streams them to the glasses over Bluetooth Classic SPP. The glasses receive a full lyrics snapshot on connect, then receive lightweight progress sync events as the song plays — so lyrics advance in real time on the AR display.
+The phone app watches the active Android media session, detects the current track, fetches synced lyrics from a provider chain, and streams the result to the glasses over Bluetooth Classic SPP.
 
-No internet required on the glasses side. No cloud relay. Everything runs locally over Bluetooth.
+Current provider order:
+
+1. `Musixmatch` as the main authenticated provider
+2. `Netease` as the secondary fallback
+3. `LRCLIB` as the public final fallback
+
+When the glasses connect, they receive a full lyrics snapshot first, then lightweight progress sync events as the song plays so the HUD stays in sync in real time.
+
+No internet is required on the glasses side. No cloud relay. Everything runs locally between the phone and the glasses.
 
 ---
 
 ## Features
 
-- Time-synced lyrics on the AR display, automatically fetched for whatever is playing
-- (Should) Works with any Android media player - (Only Spotify has been tested)
-- Runs entirely over Bluetooth, no internet needed on the glasses
-- Press Enter on the glasses to play/pause the music on the phone
+- Time-synced lyrics on Rokid AR glasses for the currently playing track
+- Multi-provider lookup pipeline with graceful fallback
+- Works with Android media sessions instead of being tied to one specific player
+- Runs entirely over Bluetooth between the phone and the glasses
+- Press Enter on the glasses to play or pause music on the phone
 
 ---
 
 ## Project structure
 
-```
+```text
 android-phone/       Android phone runtime (media monitor + BT server + lyrics engine)
 android-glasses/     Android glasses client (BT client + HUD renderer)
 shared-contracts/    Shared Bluetooth wire protocol and lyrics data contracts
@@ -72,7 +94,7 @@ Release builds read signing values from environment variables or matching Gradle
 - `ROKID_LYRICS_VERSION_NAME` (optional)
 - `ROKID_LYRICS_VERSION_CODE` (optional)
 
-`assembleRelease` falls back to the debug keystore if those values are absent so you can validate the release path locally or in CI. GitHub Actions uses the real release keystore when all signing secrets are configured, otherwise it falls back to the debug keystore and still publishes `release.apk` artifacts. Partial signing configuration fails the build.
+`assembleRelease` falls back to the debug keystore if those values are absent so you can validate the release path locally or in CI. GitHub Actions uses the real release keystore when all signing secrets are configured, otherwise it falls back to the debug keystore and still publishes release APK artifacts. Partial signing configuration fails the build.
 
 ---
 
@@ -80,9 +102,10 @@ Release builds read signing values from environment variables or matching Gradle
 
 1. Install `lyrics-phone-debug.apk` on the Android phone and `lyrics-glasses-debug.apk` on the Rokid device
 2. Pair the phone and the glasses over Bluetooth at the OS level first
-3. Open the phone app — grant Bluetooth and notification permissions
+3. Open the phone app and grant Bluetooth and notification permissions
 4. Tap **[ NOTIF ACCESS ]** and enable the notification listener for Rokid Lyrics
-5. Start playing music on the phone (Spotify, YouTube, etc.)
-6. Open the glasses app and wait for the status to show **CONNECTED**
-7. Lyrics will appear on the glasses display within a few seconds
-8. Press Enter on the glasses to play or pause the phone playback
+5. Optional but recommended: open **Provider settings** and sign in to Musixmatch for better hit rate
+6. Start playing music on the phone
+7. Open the glasses app and wait for the status to show **CONNECTED**
+8. Lyrics should appear on the glasses display within a few seconds
+9. Press Enter on the glasses to play or pause playback on the phone
