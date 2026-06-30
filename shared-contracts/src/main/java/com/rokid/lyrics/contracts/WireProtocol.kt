@@ -29,6 +29,7 @@ object WireProtocol {
 
     private fun glassesEnvelopeFor(message: GlassesToPhoneMessage): WireEnvelope = when (message) {
         is GlassesToPhoneMessage.Hello -> WireEnvelope("runtime", "hello", gson.toJson(message.hello))
+        is GlassesToPhoneMessage.MediaHint -> WireEnvelope("runtime", "media_hint", gson.toJson(message.hint))
         GlassesToPhoneMessage.RequestSnapshot -> WireEnvelope("runtime", "request_snapshot")
         GlassesToPhoneMessage.RequestStatus -> WireEnvelope("runtime", "request_status")
         GlassesToPhoneMessage.TogglePlayback -> WireEnvelope("runtime", "toggle_playback")
@@ -37,6 +38,7 @@ object WireProtocol {
     private fun glassesMessageFor(envelope: WireEnvelope): GlassesToPhoneMessage? = when (envelope.channel) {
         "runtime" -> when (envelope.type) {
             "hello" -> parsePayload(envelope, ProtocolHello::class.java)?.let { GlassesToPhoneMessage.Hello(it) }
+            "media_hint" -> parsePayload(envelope, MediaPlaybackHint::class.java)?.let { GlassesToPhoneMessage.MediaHint(it) }
             "request_snapshot" -> GlassesToPhoneMessage.RequestSnapshot
             "request_status" -> GlassesToPhoneMessage.RequestStatus
             "toggle_playback" -> GlassesToPhoneMessage.TogglePlayback
@@ -51,6 +53,8 @@ object WireProtocol {
         is PhoneToGlassesMessage.Status -> WireEnvelope("runtime", "status", gson.toJson(message.status))
         is PhoneToGlassesMessage.Lyrics -> when (val event = message.event) {
             is LyricsEvent.Snapshot -> WireEnvelope("lyrics", "snapshot", gson.toJson(event.snapshot))
+            is LyricsEvent.Window -> WireEnvelope("lyrics", "window", gson.toJson(event.snapshot))
+            is LyricsEvent.Script -> WireEnvelope("lyrics", "script", gson.toJson(event.snapshot))
             is LyricsEvent.Sync -> WireEnvelope("lyrics", "sync", gson.toJson(event.sync))
             is LyricsEvent.Error -> WireEnvelope("lyrics", "error", gson.toJson(event))
         }
@@ -69,6 +73,14 @@ object WireProtocol {
         "lyrics" -> when (envelope.type) {
             "snapshot" -> parsePayload(envelope, LyricsSnapshot::class.java)?.let {
                 PhoneToGlassesMessage.Lyrics(LyricsEvent.Snapshot(it))
+            }
+
+            "window" -> parsePayload(envelope, LyricsWindowSnapshot::class.java)?.let {
+                PhoneToGlassesMessage.Lyrics(LyricsEvent.Window(it))
+            }
+
+            "script" -> parsePayload(envelope, LyricsScriptSnapshot::class.java)?.let {
+                PhoneToGlassesMessage.Lyrics(LyricsEvent.Script(it))
             }
 
             "sync" -> parsePayload(envelope, LyricsPlaybackSync::class.java)?.let {

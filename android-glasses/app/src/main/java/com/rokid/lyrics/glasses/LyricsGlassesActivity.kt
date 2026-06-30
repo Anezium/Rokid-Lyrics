@@ -4,17 +4,19 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
+import android.util.Log
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.rokid.lyrics.glasses.bluetooth.LyricsBluetoothBridge
+import com.rokid.lyrics.contracts.GlassesToPhoneMessage
+import com.rokid.lyrics.glasses.transport.LyricsHybridBridge
 
 class LyricsGlassesActivity : AppCompatActivity() {
     private lateinit var lyricsHudView: LyricsHudView
-    private var bluetoothBridge: LyricsBluetoothBridge? = null
+    private var bridge: LyricsHybridBridge? = null
     private var stateStore: LyricsGlassesStateStore? = null
+    private var mediaHintMonitor: GlassesMediaHintMonitor? = null
     private var unsubscribe: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -29,47 +31,37 @@ class LyricsGlassesActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        Log.i(TAG, "onStart")
         startBridgeIfReady()
     }
 
+    override fun onResume() {
+        super.onResume()
+        Log.i(TAG, "onResume")
+    }
+
+    override fun onPause() {
+        Log.i(TAG, "onPause")
+        super.onPause()
+    }
+
     override fun onStop() {
+        Log.i(TAG, "onStop")
         unsubscribe?.invoke()
         unsubscribe = null
+        mediaHintMonitor?.stop()
         lyricsHudView.suspendTicker()
-        val shouldKeepOfflineRelay = stateStore?.current()?.let { state ->
-            state.trackTitle.isNotBlank() || state.lines.isNotEmpty() || state.plainLyrics.isNotBlank()
-        } == true
-        if (shouldKeepOfflineRelay) {
-            bluetoothBridge?.hibernate()
-        } else {
-            bluetoothBridge?.pause()
-        }
+        bridge?.hibernate()
         super.onStop()
     }
 
     override fun onDestroy() {
-        bluetoothBridge?.close()
-        bluetoothBridge = null
+        bridge?.close()
+        mediaHintMonitor?.stop()
+        mediaHintMonitor = null
+        bridge = null
         stateStore = null
         super.onDestroy()
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_BACK -> {
-                    finish()
-                    return true
-                }
-
-                KeyEvent.KEYCODE_ENTER,
-                KeyEvent.KEYCODE_DPAD_CENTER -> {
-                    stateStore?.togglePlayback()
-                    return true
-                }
-            }
-        }
-        return super.dispatchKeyEvent(event)
     }
 
     override fun onRequestPermissionsResult(
@@ -89,16 +81,21 @@ class LyricsGlassesActivity : AppCompatActivity() {
 
     private fun startBridgeIfReady() {
         if (!hasRuntimePermissions()) return
-        if (stateStore == null || bluetoothBridge == null) {
-            val bridge = LyricsBluetoothBridge(applicationContext)
+        if (stateStore == null || bridge == null) {
+            val bridge = LyricsHybridBridge(applicationContext)
             val store = LyricsGlassesStateStore(bridge)
-            bluetoothBridge = bridge
+            this.bridge = bridge
             stateStore = store
+            mediaHintMonitor = GlassesMediaHintMonitor(applicationContext) { hint ->
+                this.bridge?.send(GlassesToPhoneMessage.MediaHint(hint))
+            }
         }
         if (unsubscribe == null) {
             unsubscribe = stateStore?.subscribe(::renderState)
         }
-        bluetoothBridge?.resume()
+        bridge?.resume()
+        stateStore?.requestSnapshot()
+        mediaHintMonitor?.start()
     }
 
     private fun requestRuntimePermissionsIfNeeded() {
@@ -113,6 +110,11 @@ class LyricsGlassesActivity : AppCompatActivity() {
             ) {
                 add(Manifest.permission.BLUETOOTH_SCAN)
             }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
+                ContextCompat.checkSelfPermission(this@LyricsGlassesActivity, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+            ) {
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
         }
         if (missing.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQUEST_PERMISSIONS)
@@ -124,10 +126,13 @@ class LyricsGlassesActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
         val scanGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
-        return bluetoothGranted && scanGranted
+        val locationGranted = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        return bluetoothGranted && scanGranted && locationGranted
     }
 
     private companion object {
+        private const val TAG = "RokidLyricsActivity"
         private const val REQUEST_PERMISSIONS = 4001
     }
 }

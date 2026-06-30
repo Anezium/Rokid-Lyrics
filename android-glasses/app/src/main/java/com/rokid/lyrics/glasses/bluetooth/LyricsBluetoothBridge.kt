@@ -14,6 +14,7 @@ import com.rokid.lyrics.contracts.PhoneToGlassesMessage
 import com.rokid.lyrics.contracts.ProtocolHello
 import com.rokid.lyrics.contracts.TransportConstants
 import com.rokid.lyrics.contracts.WireProtocol
+import com.rokid.lyrics.glasses.transport.LyricsPhoneBridge
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
@@ -24,7 +25,7 @@ import java.util.concurrent.CopyOnWriteArraySet
 
 class LyricsBluetoothBridge(
     private val context: Context,
-) {
+) : LyricsPhoneBridge {
     private data class DisconnectStatus(
         val connectionState: ConnectionState,
         val label: String,
@@ -74,14 +75,14 @@ class LyricsBluetoothBridge(
         }
     }
 
-    fun send(message: GlassesToPhoneMessage) {
+    override fun send(message: GlassesToPhoneMessage) {
         if (closed) return
         if (!trySend(message) && shouldQueue(message)) {
-            pendingMessages += message
+            queuePending(message)
         }
     }
 
-    fun subscribe(listener: (PhoneToGlassesMessage) -> Unit): () -> Unit {
+    override fun subscribe(listener: (PhoneToGlassesMessage) -> Unit): () -> Unit {
         listeners += listener
         return { listeners -= listener }
     }
@@ -319,21 +320,34 @@ class LyricsBluetoothBridge(
 
     private fun shouldQueue(message: GlassesToPhoneMessage): Boolean = when (message) {
         is GlassesToPhoneMessage.Hello -> false
+        is GlassesToPhoneMessage.MediaHint -> false
         GlassesToPhoneMessage.RequestSnapshot,
         GlassesToPhoneMessage.RequestStatus -> true
         GlassesToPhoneMessage.TogglePlayback -> false
+    }
+
+    private fun queuePending(message: GlassesToPhoneMessage) {
+        val existingIndex = pendingMessages.indexOfFirst { it::class == message::class }
+        if (existingIndex >= 0) {
+            pendingMessages[existingIndex] = message
+        } else {
+            pendingMessages += message
+        }
+        while (pendingMessages.size > MAX_PENDING_MESSAGES) {
+            pendingMessages.removeAt(0)
+        }
     }
 
     private fun flushPending() {
         if ((!active && !hibernating) || !handshakeComplete || pendingMessages.isEmpty()) return
         val drain = pendingMessages.toList()
         pendingMessages.clear()
-        drain.forEach { message ->
-            if (!trySend(message)) {
-                pendingMessages += message
+            drain.forEach { message ->
+                if (!trySend(message)) {
+                    queuePending(message)
+                }
             }
         }
-    }
 
     private fun handleDisconnect() {
         val disconnectStatus: DisconnectStatus?
@@ -426,9 +440,14 @@ class LyricsBluetoothBridge(
         private const val HIBERNATE_REFRESH_INTERVAL_MS = 20_000L
         private const val HIBERNATE_CONNECTED_WINDOW_MS = 3_500L
         private const val HANDSHAKE_TIMEOUT_MS = 3500L
+        private const val MAX_PENDING_MESSAGES = 2
         private val GLASSES_CAPABILITIES = listOf(
             "request_status",
             "request_snapshot",
+            "media_hint",
+            "lyrics_window",
+            "lyrics_script",
+            "lyrics_sync",
             "toggle_playback",
         )
     }

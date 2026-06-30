@@ -27,7 +27,6 @@ class LyricsHudView @JvmOverloads constructor(
     private val currentLineView: TextView
     private val nextLineView: TextView
     private val bottomSpacer: View
-    private val hintView: TextView
 
     private var lastRenderedState: LyricsGlassesState? = null
     private var playbackClockTrackKey: String? = null
@@ -96,16 +95,6 @@ class LyricsHudView @JvmOverloads constructor(
         bottomSpacer = View(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
         }
-        hintView = monoText(10.5f, COLOR_HINT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            textAlignment = TEXT_ALIGNMENT_CENTER
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                topMargin = px(12)
-            }
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-        }
-
         headerContainer.addView(titleView)
         headerContainer.addView(metaView)
         headerContainer.addView(stateView)
@@ -114,7 +103,6 @@ class LyricsHudView @JvmOverloads constructor(
         addView(currentLineView)
         addView(nextLineView)
         addView(bottomSpacer)
-        addView(hintView)
     }
 
     fun render(state: LyricsGlassesState) {
@@ -161,7 +149,6 @@ class LyricsHudView @JvmOverloads constructor(
         currentLineView.text = body.currentLine
         nextLineView.text = body.nextLine
         nextLineView.visibility = if (body.nextLine.isBlank()) GONE else VISIBLE
-        hintView.text = body.hint
     }
 
     private fun buildTitle(state: LyricsGlassesState): String = when {
@@ -175,11 +162,7 @@ class LyricsHudView @JvmOverloads constructor(
         if (state.trackTitle.isBlank() && state.artistName.isBlank()) return ""
         return buildString {
             state.provider.takeIf { it.isNotBlank() }?.let { provider ->
-                append(provider)
-            }
-            if (state.synced) {
-                if (isNotEmpty()) append("  ")
-                append("synced")
+                append(providerLabel(provider))
             }
             if (state.albumName.isNotBlank()) {
                 if (isNotEmpty()) append("  /  ")
@@ -187,6 +170,15 @@ class LyricsHudView @JvmOverloads constructor(
             }
         }
     }
+
+    private fun providerLabel(provider: String): String =
+        when (provider.uppercase()) {
+            "SPOTIFY" -> "Spotify"
+            "MUSIXMATCH" -> "Musixmatch"
+            "LRCLIB" -> "LRCLIB"
+            "NETEASE" -> "Netease"
+            else -> provider
+        }
 
     private fun buildStatus(state: LyricsGlassesState): String {
         return when {
@@ -200,8 +192,7 @@ class LyricsHudView @JvmOverloads constructor(
         state.errorMessage?.takeIf { it.isNotBlank() }?.let { error ->
             return BodyCopy(
                 currentLine = error,
-                nextLine = "Playback control still works from the glasses.",
-                hint = CONTROL_HINT,
+                nextLine = "Keep playback control on the phone.",
             )
         }
 
@@ -209,7 +200,6 @@ class LyricsHudView @JvmOverloads constructor(
             return BodyCopy(
                 currentLine = "Waiting for the phone Bluetooth link.",
                 nextLine = "Open the phone app, then start playback.",
-                hint = CONTROL_HINT,
             )
         }
 
@@ -217,7 +207,6 @@ class LyricsHudView @JvmOverloads constructor(
             return BodyCopy(
                 currentLine = "Loading lyrics...",
                 nextLine = "",
-                hint = CONTROL_HINT,
             )
         }
 
@@ -232,7 +221,6 @@ class LyricsHudView @JvmOverloads constructor(
             return BodyCopy(
                 currentLine = currentLine,
                 nextLine = nextLine,
-                hint = CONTROL_HINT,
             )
         }
 
@@ -244,7 +232,6 @@ class LyricsHudView @JvmOverloads constructor(
             return BodyCopy(
                 currentLine = plainLines.first(),
                 nextLine = plainLines.getOrNull(1).orEmpty(),
-                hint = CONTROL_HINT,
             )
         }
 
@@ -252,14 +239,12 @@ class LyricsHudView @JvmOverloads constructor(
             return BodyCopy(
                 currentLine = "Start music on the phone.",
                 nextLine = "The glasses only wake up the Bluetooth link while this screen is open.",
-                hint = CONTROL_HINT,
             )
         }
 
         return BodyCopy(
             currentLine = "No lyrics found.",
             nextLine = "Try another song or keep playback on the phone.",
-            hint = CONTROL_HINT,
         )
     }
 
@@ -332,12 +317,13 @@ class LyricsHudView @JvmOverloads constructor(
     }
 
     private fun localPlaybackProgressMs(now: Long): Long {
-        val elapsed = (now - playbackClockAnchorElapsedMs).coerceIn(0L, MAX_LOCAL_PLAYBACK_GAP_MS)
+        val elapsed = (now - playbackClockAnchorElapsedMs).coerceAtLeast(0L)
         return playbackClockBaseProgressMs + elapsed
     }
 
     private fun playbackTrackKey(state: LyricsGlassesState): String? {
         if (state.lines.isEmpty() && state.plainLyrics.isBlank()) return null
+        if (state.mediaKey.isNotBlank()) return "${state.mediaKey}|${state.revision}"
         val lastLineStartMs = state.lines.lastOrNull()?.startTimeMs ?: 0L
         return listOf(
             state.trackTitle,
@@ -386,19 +372,15 @@ class LyricsHudView @JvmOverloads constructor(
     private data class BodyCopy(
         val currentLine: String,
         val nextLine: String,
-        val hint: String,
     )
 
     private companion object {
         private const val PLAYBACK_TICK_MS = 80L
-        private const val MAX_LOCAL_PLAYBACK_GAP_MS = 60_000L
         private const val HARD_RESYNC_THRESHOLD_MS = 2_000L
         private const val SOFT_FORWARD_CORRECTION_MS = 400L
-        private const val CONTROL_HINT = "Enter play/pause   Back exit"
         private val COLOR_PRIMARY = Color.parseColor("#FFE7A3")
         private val COLOR_SECONDARY = Color.parseColor("#D5BB7A")
         private val COLOR_DIM = Color.parseColor("#A48B59")
-        private val COLOR_HINT = Color.parseColor("#8F7A52")
         private val COLOR_SHADOW = Color.parseColor("#CC000000")
     }
 }

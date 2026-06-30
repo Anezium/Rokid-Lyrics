@@ -150,6 +150,13 @@ class LyricsBluetoothServer(
                             }
                         }
 
+                        is GlassesToPhoneMessage.MediaHint -> {
+                            if (!session.handshakeComplete) {
+                                disconnectSession(session, PROTOCOL_MISMATCH_STATUS, PROTOCOL_MISMATCH_ERROR)
+                                return@Thread
+                            }
+                        }
+
                         GlassesToPhoneMessage.RequestSnapshot -> {
                             if (!session.handshakeComplete) {
                                 disconnectSession(session, PROTOCOL_MISMATCH_STATUS, PROTOCOL_MISMATCH_ERROR)
@@ -360,6 +367,8 @@ class LyricsBluetoothServer(
         private val PHONE_CAPABILITIES = listOf(
             "status",
             "lyrics_snapshot",
+            "lyrics_window",
+            "lyrics_script",
             "lyrics_sync",
             "toggle_playback",
         )
