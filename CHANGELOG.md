@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file.
 - Spotify color-lyrics provider on the phone, ported from the iOS companion app. When Spotify is the active player and an `sp_dc` cookie is configured, Spotify's own line-synced lyrics are tried before Musixmatch, Netease, and LRCLIB.
 - Spotify track IDs are read directly from the Spotify media session, so Spotify lookups match the exact playing track instead of relying on title/artist search.
 - New Spotify settings dialog in the phone UI to save or clear the `sp_dc` cookie, stored in encrypted preferences, with provider status reported per lookup like the other providers.
+- In-app Spotify login: a WebView flow captures the `sp_dc` cookie automatically after a successful sign-in, then wipes the WebView session. Each login starts from a clean session so a stale cookie from an earlier visit can never be captured instead of a fresh one.
 
 ## [0.2.4] - 2026-03-29
 

@@ -302,6 +302,7 @@ class LyricsPhoneActivity : AppCompatActivity() {
     private fun showSpotifyDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_spotify_settings, null)
         val spDcField = dialogView.findViewById<EditText>(R.id.editSpotifySpDc)
+        val webLoginButton = dialogView.findViewById<Button>(R.id.btnSpotifyWebLogin)
         val dialog = AlertDialog.Builder(this, R.style.Theme_PhosphorDialog)
             .setTitle(R.string.spotify_dialog_title)
             .setView(dialogView)
@@ -313,6 +314,10 @@ class LyricsPhoneActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .create()
 
+        webLoginButton.setOnClickListener {
+            startActivity(Intent(this, SpotifyLoginActivity::class.java))
+            dialog.dismiss()
+        }
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val rawValue = spDcField.text?.toString().orEmpty()

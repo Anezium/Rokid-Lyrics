@@ -12,13 +12,17 @@
     <string name="phone_header_title">[ ROKID LYRICS ]</string>
     <string name="bluetooth_connection_state">Bluetooth: %1$s</string>
     <string name="spotify_dialog_title">Spotify lyrics</string>
-    <string name="spotify_dialog_message">Paste the sp_dc cookie from a logged-in open.spotify.com web session. Raw value, sp_dc=value, or a full Cookie header all work.</string>
+    <string name="spotify_dialog_message">Log in below to capture the sp_dc cookie automatically, or paste it manually from a logged-in open.spotify.com web session.</string>
+    <string name="spotify_dialog_web_login">[ LOG IN WITH SPOTIFY ]</string>
     <string name="spotify_dialog_hint">sp_dc cookie value</string>
     <string name="spotify_dialog_save">Save</string>
     <string name="spotify_dialog_clear">Clear</string>
     <string name="spotify_dialog_invalid">Could not find an sp_dc value in the pasted text.</string>
     <string name="spotify_saved_toast">Spotify cookie saved.</string>
     <string name="spotify_cleared_toast">Spotify cookie cleared.</string>
+    <string name="spotify_login_title">[ SPOTIFY LOGIN ]</string>
+    <string name="spotify_login_hint">Log in with your own account. The app only reads the sp_dc cookie, then closes.</string>
+    <string name="spotify_login_captured">Spotify cookie captured.</string>
     <string name="musixmatch_dialog_title">Musixmatch</string>
     <string name="musixmatch_dialog_message">Save your Musixmatch email and password so the app can fetch line-synced subtitles on device.</string>
     <string name="musixmatch_dialog_email_label">Email</string>

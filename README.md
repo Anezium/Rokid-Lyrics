@@ -35,7 +35,7 @@ Spotify's own synced lyrics are now a first-class provider on the phone, ported 
 
 - Added a `SPOTIFY` provider at the top of the chain: `Spotify -> Musixmatch -> Netease -> LRCLIB`
 - When Spotify is the active player, the app reads the exact track ID from its media session, so Spotify lyrics need no search heuristics at all
-- Added an optional `sp_dc` cookie field in the phone UI; the cookie stays on the device in encrypted storage
+- Added an in-app Spotify login that captures the `sp_dc` cookie automatically, plus a manual paste field as fallback; the cookie stays on the device in encrypted storage
 - Without the cookie, or for non-Spotify players, the existing chain works exactly as before
 
 Previous chantier: turning the phone app into a real multi-provider lyrics pipeline instead of a single-source prototype (Musixmatch sign-in, lookup dedup, graceful fallback messaging).
@@ -107,14 +107,18 @@ Release builds read signing values from environment variables or matching Gradle
 
 ## Spotify lyrics (`sp_dc`)
 
-The Spotify provider fetches Spotify's official line-synced lyrics for the exact track playing in the Spotify app. It needs your own `sp_dc` session cookie, which is only available from a logged-in Spotify **web** session:
+The Spotify provider fetches Spotify's official line-synced lyrics for the exact track playing in the Spotify app. It needs your own `sp_dc` session cookie, and there are two ways to provide it:
 
-1. On a desktop browser, open `https://open.spotify.com/` and log in with your own account
+**In-app login (easiest).** Tap **[ SET UP SPOTIFY ]** -> **[ LOG IN WITH SPOTIFY ]** and sign in on the Spotify page that opens. The app reads the `sp_dc` cookie from its own WebView the moment the login completes, saves it, and wipes the WebView session — nothing else is kept. The login always starts from a clean session, so a leftover cookie from an old visit can never be captured by mistake.
+
+**Manual paste (fallback).** Grab the cookie from a logged-in Spotify web session on a desktop browser:
+
+1. Open `https://open.spotify.com/` and log in with your own account
 2. Open DevTools and go to `Application` -> `Storage` -> `Cookies` -> `https://open.spotify.com`
 3. Copy the `Value` of the `sp_dc` cookie
-4. In the phone app, tap **[ SET UP SPOTIFY ]** and paste it — the raw value, `sp_dc=value`, or a full `Cookie:` header all work
+4. Paste it into the same dialog — the raw value, `sp_dc=value`, or a full `Cookie:` header all work
 
-The cookie is stored in encrypted preferences on the phone and never leaves the device. If lookups start reporting an anonymous token, the cookie is stale: refresh `open.spotify.com` while logged in and paste the new value.
+Either way the cookie is stored in encrypted preferences on the phone and never leaves the device. If lookups start reporting an anonymous token, the cookie is stale: log in again from the app, or paste a fresh value.
 
 Keep in mind `sp_dc` is an account session cookie, not an API token — treat it like a password, never share or commit it. Spotify's `color-lyrics` endpoint is an internal API that can change without notice, so this provider is best-effort by design; the rest of the chain covers the gaps.
 
