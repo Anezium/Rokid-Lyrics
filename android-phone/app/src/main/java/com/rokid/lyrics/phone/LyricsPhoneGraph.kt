@@ -11,6 +11,7 @@ import com.rokid.lyrics.phone.lyrics.MusixmatchLyricsProvider
 import com.rokid.lyrics.phone.lyrics.NeteaseLyricsProvider
 import com.rokid.lyrics.phone.lyrics.ProviderAttemptOutcome
 import com.rokid.lyrics.phone.lyrics.ProviderAttemptSummary
+import com.rokid.lyrics.phone.lyrics.SpotifyLyricsProvider
 import com.rokid.lyrics.phone.media.MediaSessionMonitor
 import com.rokid.lyrics.phone.settings.LyricsProviderSettingsStore
 import com.rokid.lyrics.phone.settings.MusixmatchCredentials
@@ -28,6 +29,7 @@ object LyricsPhoneGraph {
     lateinit var providerSettingsStore: LyricsProviderSettingsStore
         private set
     private lateinit var appContext: Context
+    private lateinit var spotifyLyricsProvider: SpotifyLyricsProvider
     private lateinit var musixmatchLyricsProvider: MusixmatchLyricsProvider
     private lateinit var neteaseLyricsProvider: NeteaseLyricsProvider
 
@@ -36,6 +38,9 @@ object LyricsPhoneGraph {
         if (initialized) return
         appContext = context.applicationContext
         providerSettingsStore = LyricsProviderSettingsStore(appContext)
+        spotifyLyricsProvider = SpotifyLyricsProvider(
+            spDcSource = providerSettingsStore,
+        )
         musixmatchLyricsProvider = MusixmatchLyricsProvider(
             credentialsSource = providerSettingsStore,
             sessionCacheSource = providerSettingsStore,
@@ -45,6 +50,7 @@ object LyricsPhoneGraph {
             stateStore = stateStore,
             lyricsProvider = CompositeLyricsProvider(
                 providers = listOf(
+                    spotifyLyricsProvider,
                     musixmatchLyricsProvider,
                     neteaseLyricsProvider,
                     LrcLibLyricsClient(),
@@ -97,6 +103,25 @@ object LyricsPhoneGraph {
         return providerSettingsStore.getMusixmatchCredentials()
     }
 
+    fun saveSpotifySpDc(raw: String) {
+        if (!initialized) return
+        providerSettingsStore.saveSpotifySpDc(raw)
+        spotifyLyricsProvider.invalidateSession()
+        syncProviderSettingsState(preserveDynamicLabels = false)
+        lyricsRuntimeEngine.refresh()
+    }
+
+    fun clearSpotifySpDc() {
+        if (!initialized) return
+        providerSettingsStore.clearSpotifySpDc()
+        spotifyLyricsProvider.invalidateSession()
+        syncProviderSettingsState(preserveDynamicLabels = false)
+        lyricsRuntimeEngine.refresh()
+    }
+
+    fun hasSpotifySpDc(): Boolean =
+        initialized && providerSettingsStore.hasSpotifySpDc()
+
     fun saveMusixmatchCredentials(email: String, password: String) {
         if (!initialized) return
         providerSettingsStore.saveMusixmatchCredentials(email, password)
@@ -130,6 +155,13 @@ object LyricsPhoneGraph {
                 defaults
             } else {
                 current.copy(
+                    spotifyConfigured = defaults.spotifyConfigured,
+                    spotifyStatusLabel = current.spotifyStatusLabel.takeUnless {
+                        it.isBlank() ||
+                            it.startsWith("Spotify is configured.") ||
+                            it.startsWith("Paste your Spotify sp_dc cookie") ||
+                            it.startsWith("Add your Spotify sp_dc cookie")
+                    } ?: defaults.spotifyStatusLabel,
                     musixmatchConfigured = defaults.musixmatchConfigured,
                     musixmatchStatusLabel = current.musixmatchStatusLabel.takeUnless {
                         it.isBlank() ||
@@ -159,8 +191,15 @@ object LyricsPhoneGraph {
     }
 
     private fun defaultProviderSettingsViewState(): ProviderSettingsViewState {
+        val spotifyConfigured = providerSettingsStore.hasSpotifySpDc()
         val musixmatchConfigured = providerSettingsStore.hasMusixmatchCredentials()
         return ProviderSettingsViewState(
+            spotifyConfigured = spotifyConfigured,
+            spotifyStatusLabel = if (spotifyConfigured) {
+                "Spotify is configured. Waiting for the next lyrics lookup."
+            } else {
+                "Paste your Spotify sp_dc cookie to try Spotify's own synced lyrics first."
+            },
             musixmatchConfigured = musixmatchConfigured,
             musixmatchStatusLabel = if (musixmatchConfigured) {
                 "Musixmatch is configured. Waiting for the next lyrics lookup."
@@ -203,10 +242,14 @@ internal fun providerStatusViewState(
 ): ProviderSettingsViewState {
     val resolvedProvider = summaries.lastOrNull { it.outcome == ProviderAttemptOutcome.SUCCESS }?.provider
     var next = defaults.copy(
+        spotifyConfigured = current.spotifyConfigured,
         musixmatchConfigured = current.musixmatchConfigured,
     )
     summaries.forEach { summary ->
         next = when (summary.provider) {
+            "SPOTIFY" -> next.copy(
+                spotifyStatusLabel = providerStatusLabel(summary, resolvedProvider),
+            )
             "MUSIXMATCH" -> next.copy(
                 musixmatchStatusLabel = providerStatusLabel(summary, resolvedProvider),
             )

@@ -19,6 +19,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.startForegroundService
 import com.rokid.lyrics.contracts.LyricsSessionState
+import com.rokid.lyrics.phone.lyrics.SpotifySpDcCookie
 
 class LyricsPhoneActivity : AppCompatActivity() {
 
@@ -37,6 +38,8 @@ class LyricsPhoneActivity : AppCompatActivity() {
     private lateinit var tvConnectionStatus: TextView
     private lateinit var tvClientCount: TextView
     private lateinit var tvStatusLabel: TextView
+    private lateinit var btnSpotifySettings: Button
+    private lateinit var tvSpotifyStatus: TextView
     private lateinit var btnMusixmatchSettings: Button
     private lateinit var tvMusixmatchStatus: TextView
     private lateinit var tvNeteaseStatus: TextView
@@ -62,6 +65,8 @@ class LyricsPhoneActivity : AppCompatActivity() {
         tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         tvClientCount = findViewById(R.id.tvClientCount)
         tvStatusLabel = findViewById(R.id.tvStatusLabel)
+        btnSpotifySettings = findViewById(R.id.btnSpotifySettings)
+        tvSpotifyStatus = findViewById(R.id.tvSpotifyStatus)
         btnMusixmatchSettings = findViewById(R.id.btnMusixmatchSettings)
         tvMusixmatchStatus = findViewById(R.id.tvMusixmatchStatus)
         tvNeteaseStatus = findViewById(R.id.tvNeteaseStatus)
@@ -74,6 +79,7 @@ class LyricsPhoneActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnBluetoothSettings).setOnClickListener {
             startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         }
+        btnSpotifySettings.setOnClickListener { showSpotifyDialog() }
         btnMusixmatchSettings.setOnClickListener { showMusixmatchDialog() }
 
         btPulseAnimator = ObjectAnimator.ofFloat(viewBtDot, "alpha", 1f, 0.15f).apply {
@@ -199,6 +205,12 @@ class LyricsPhoneActivity : AppCompatActivity() {
             ),
         )
 
+        btnSpotifySettings.text = if (state.providers.spotifyConfigured) {
+            getString(R.string.button_spotify_update)
+        } else {
+            getString(R.string.button_spotify_setup)
+        }
+        tvSpotifyStatus.text = state.providers.spotifyStatusLabel
         btnMusixmatchSettings.text = if (state.providers.musixmatchConfigured) {
             getString(R.string.button_musixmatch_ready)
         } else {
@@ -285,6 +297,40 @@ class LyricsPhoneActivity : AppCompatActivity() {
         val scanGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
         return bluetoothGranted && scanGranted
+    }
+
+    private fun showSpotifyDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_spotify_settings, null)
+        val spDcField = dialogView.findViewById<EditText>(R.id.editSpotifySpDc)
+        val webLoginButton = dialogView.findViewById<Button>(R.id.btnSpotifyWebLogin)
+        val dialog = AlertDialog.Builder(this, R.style.Theme_PhosphorDialog)
+            .setTitle(R.string.spotify_dialog_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.spotify_dialog_save, null)
+            .setNeutralButton(R.string.spotify_dialog_clear) { _, _ ->
+                LyricsPhoneGraph.clearSpotifySpDc()
+                Toast.makeText(this, R.string.spotify_cleared_toast, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+
+        webLoginButton.setOnClickListener {
+            startActivity(Intent(this, SpotifyLoginActivity::class.java))
+            dialog.dismiss()
+        }
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val rawValue = spDcField.text?.toString().orEmpty()
+                if (SpotifySpDcCookie.extractValue(rawValue) == null) {
+                    spDcField.error = getString(R.string.spotify_dialog_invalid)
+                    return@setOnClickListener
+                }
+                LyricsPhoneGraph.saveSpotifySpDc(rawValue)
+                Toast.makeText(this, R.string.spotify_saved_toast, Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
     private fun showMusixmatchDialog() {

@@ -35,6 +35,11 @@
         </service>
 
         <activity
+            android:name=".SpotifyLoginActivity"
+            android:exported="false"
+            android:theme="@style/Theme.RokidLyricsPhone" />
+
+        <activity
             android:name=".LyricsPhoneActivity"
             android:exported="true"
             android:theme="@style/Theme.RokidLyricsPhone">
