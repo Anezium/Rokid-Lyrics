@@ -302,9 +302,37 @@
         android:paddingTop="10dp">
 
         <Button
+            android:id="@+id/btnSpotifySettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/button_spotify_setup"
+            android:textColor="@color/phosphor_dim"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.14"
+            android:background="@drawable/btn_outline_green"
+            android:paddingTop="11dp"
+            android:paddingBottom="11dp"
+            android:gravity="center"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false" />
+
+        <TextView
+            android:id="@+id/tvSpotifyStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/phosphor_text_ghost"
+            android:textSize="9sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="2dp"
+            android:maxLines="2" />
+
+        <Button
             android:id="@+id/btnMusixmatchSettings"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:text="@string/button_musixmatch_sign_in"
             android:textColor="@color/phosphor_dim"
             android:textSize="9sp"

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import com.rokid.lyrics.phone.lyrics.SpotifySpDcCookie
 
 data class MusixmatchCredentials(
     val email: String,
@@ -26,9 +27,13 @@ interface MusixmatchSessionCacheSource {
     fun clearMusixmatchSessionToken()
 }
 
+interface SpotifySpDcSource {
+    fun getSpotifySpDc(): String?
+}
+
 class LyricsProviderSettingsStore(
     context: Context,
-) : MusixmatchCredentialsSource, MusixmatchSessionCacheSource {
+) : MusixmatchCredentialsSource, MusixmatchSessionCacheSource, SpotifySpDcSource {
     private val preferences: SharedPreferences = createPreferences(context.applicationContext)
 
     override fun getMusixmatchCredentials(): MusixmatchCredentials? {
@@ -53,6 +58,31 @@ class LyricsProviderSettingsStore(
             userToken = userToken,
             expiresAtMs = expiresAtMs,
         )
+    }
+
+    override fun getSpotifySpDc(): String? =
+        preferences.getString(KEY_SPOTIFY_SP_DC, null)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+    fun hasSpotifySpDc(): Boolean =
+        getSpotifySpDc() != null
+
+    fun saveSpotifySpDc(value: String) {
+        val normalized = SpotifySpDcCookie.extractValue(value)
+        preferences.edit().apply {
+            if (normalized == null) {
+                remove(KEY_SPOTIFY_SP_DC)
+            } else {
+                putString(KEY_SPOTIFY_SP_DC, normalized)
+            }
+        }.apply()
+    }
+
+    fun clearSpotifySpDc() {
+        preferences.edit()
+            .remove(KEY_SPOTIFY_SP_DC)
+            .apply()
     }
 
     fun hasMusixmatchCredentials(): Boolean =
@@ -111,6 +141,7 @@ class LyricsProviderSettingsStore(
     private companion object {
         private const val TAG = "LyricsProviderSettings"
         private const val PREFERENCES_NAME = "lyrics_provider_settings"
+        private const val KEY_SPOTIFY_SP_DC = "spotify_sp_dc"
         private const val KEY_MUSIXMATCH_EMAIL = "musixmatch_email"
         private const val KEY_MUSIXMATCH_PASSWORD = "musixmatch_password"
         private const val KEY_MUSIXMATCH_USER_TOKEN = "musixmatch_user_token"

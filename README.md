@@ -31,14 +31,14 @@
 
 ## Latest update
 
-The biggest recent chantier was turning the phone app into a real multi-provider lyrics pipeline instead of a single-source prototype.
+Spotify's own synced lyrics are now a first-class provider on the phone, ported from the iOS companion app.
 
-- Added a provider chain on the phone: `Musixmatch -> Netease -> LRCLIB`
-- Added optional Musixmatch sign-in and provider-aware status in the phone UI
-- Improved lookup reliability so one track change triggers one real lookup instead of repeated retries
-- Kept already loaded lyrics on screen when a refresh for the same track fails
-- Removed the hidden Spotify preference in media session selection so the app behaves better with other players
-- Cleaned up fallback messaging so a failed provider does not pollute the final status when another provider succeeds
+- Added a `SPOTIFY` provider at the top of the chain: `Spotify -> Musixmatch -> Netease -> LRCLIB`
+- When Spotify is the active player, the app reads the exact track ID from its media session, so Spotify lyrics need no search heuristics at all
+- Added an optional `sp_dc` cookie field in the phone UI; the cookie stays on the device in encrypted storage
+- Without the cookie, or for non-Spotify players, the existing chain works exactly as before
+
+Previous chantier: turning the phone app into a real multi-provider lyrics pipeline instead of a single-source prototype (Musixmatch sign-in, lookup dedup, graceful fallback messaging).
 
 ---
 
@@ -48,9 +48,10 @@ The phone app watches the active Android media session, detects the current trac
 
 Current provider order:
 
-1. `Musixmatch` as the main authenticated provider
-2. `Netease` as the secondary fallback
-3. `LRCLIB` as the public final fallback
+1. `Spotify` color-lyrics when Spotify is playing and an `sp_dc` cookie is configured
+2. `Musixmatch` as the main authenticated provider
+3. `Netease` as the secondary fallback
+4. `LRCLIB` as the public final fallback
 
 When the glasses connect, they receive a full lyrics snapshot first, then lightweight progress sync events as the song plays so the HUD stays in sync in real time.
 
@@ -104,13 +105,28 @@ Release builds read signing values from environment variables or matching Gradle
 
 ---
 
+## Spotify lyrics (`sp_dc`)
+
+The Spotify provider fetches Spotify's official line-synced lyrics for the exact track playing in the Spotify app. It needs your own `sp_dc` session cookie, which is only available from a logged-in Spotify **web** session:
+
+1. On a desktop browser, open `https://open.spotify.com/` and log in with your own account
+2. Open DevTools and go to `Application` -> `Storage` -> `Cookies` -> `https://open.spotify.com`
+3. Copy the `Value` of the `sp_dc` cookie
+4. In the phone app, tap **[ SET UP SPOTIFY ]** and paste it — the raw value, `sp_dc=value`, or a full `Cookie:` header all work
+
+The cookie is stored in encrypted preferences on the phone and never leaves the device. If lookups start reporting an anonymous token, the cookie is stale: refresh `open.spotify.com` while logged in and paste the new value.
+
+Keep in mind `sp_dc` is an account session cookie, not an API token — treat it like a password, never share or commit it. Spotify's `color-lyrics` endpoint is an internal API that can change without notice, so this provider is best-effort by design; the rest of the chain covers the gaps.
+
+---
+
 ## First run
 
 1. Install `lyrics-phone-debug.apk` on the Android phone and `lyrics-glasses-debug.apk` on the Rokid device
 2. Pair the phone and the glasses over Bluetooth at the OS level first
 3. Open the phone app and grant Bluetooth and notification permissions
 4. Tap **[ NOTIF ACCESS ]** and enable the notification listener for Rokid Lyrics
-5. Optional but recommended: open **Provider settings** and sign in to Musixmatch for better hit rate
+5. Optional but recommended: sign in to Musixmatch, and paste your Spotify `sp_dc` cookie if you use Spotify (see above)
 6. Start playing music on the phone
 7. Open the glasses app and wait for the status to show **CONNECTED**
 8. Lyrics should appear on the glasses display within a few seconds
