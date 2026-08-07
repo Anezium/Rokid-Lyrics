@@ -1,3 +1,6 @@
+> [!WARNING]
+> **Deprecated — superseded by the [Lyrics plugin](https://github.com/Anezium/Rokid-Nexus/tree/main/plugins/lyrics) for [Rokid Nexus](https://github.com/Anezium/Rokid-Nexus).** The plugin brings the same time-synced lyrics to the glasses over the Nexus bus, with no dedicated Bluetooth link to arm, and installs in one tap from the Nexus Store. This app is no longer maintained and will not receive updates.
+
 ## Rokid Lyrics
 
 <p align="center">
