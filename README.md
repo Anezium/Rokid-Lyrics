@@ -138,3 +138,9 @@ Keep in mind `sp_dc` is an account session cookie, not an API token — treat it
 7. Open the glasses app and wait for the status to show **CONNECTED**
 8. Lyrics should appear on the glasses display within a few seconds
 9. Press Enter on the glasses to play or pause playback on the phone
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
+
+Contributions are accepted under the same license (Apache-2.0, section 5) — no CLA required.
